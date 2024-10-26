@@ -20,7 +20,6 @@ using System.Collections.Generic;
 using OpenTK.Graphics.OpenGL;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Helion.Render.OpenGL.Renderers.Legacy.World.Shader;
 
 namespace Helion.Render.OpenGL.Renderers.Legacy.World.Geometry.Static;
 
@@ -107,7 +106,7 @@ public class StaticCacheGeometryRenderer : IDisposable
             m_coverWallGeometryOneSided = AllocateGeometryData(GeometryType.Wall, textureIndex,
                 repeat: true, addToGeometry: false, world.Lines.Count * WallVertices, overrideTexture: texture);
             m_coverFlatGeometry = AllocateGeometryData(GeometryType.Flat, textureIndex,
-                repeat: true, addToGeometry: true, overrideTexture: texture);
+                repeat: true, addToGeometry: false, overrideTexture: texture);
         }
 
         for (int i = 0; i < world.Sectors.Count; i++)

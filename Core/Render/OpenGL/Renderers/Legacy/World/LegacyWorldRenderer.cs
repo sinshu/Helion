@@ -297,6 +297,7 @@ public class LegacyWorldRenderer : WorldRenderer
         SetStaticUniforms(renderInfo);
         m_geometryRenderer.RenderStaticGeometryWalls();
         m_geometryRenderer.RenderStaticGeometryFlats();
+        RenderTwoSidedMiddleWalls(renderInfo);
 
         GL.Clear(ClearBufferMask.DepthBufferBit);
         GL.ColorMask(false, false, false, false);
@@ -312,17 +313,11 @@ public class LegacyWorldRenderer : WorldRenderer
         m_staticProgram.Bind();
         GL.ActiveTexture(TextureUnit.Texture0);
         m_geometryRenderer.RenderStaticOneSidedCoverWalls();
+        RenderTwoSidedMiddleWalls(renderInfo);
         GL.ColorMask(true, true, true, true);
 
         m_entityRenderer.RenderNonAlpha(renderInfo);
         m_entityRenderer.RenderAlpha(renderInfo);
-
-        // Draw flats to depth buffer so two-sided middle walls won't bleed through flats
-        GL.ColorMask(false, false, false, false);
-        RenderFlats(renderInfo);
-        GL.ColorMask(true, true, true, true);
-
-        RenderTwoSidedMiddleWalls(renderInfo);
 
         m_interpolationProgram.Bind();
         GL.ActiveTexture(TextureUnit.Texture0);
