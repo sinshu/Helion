@@ -414,7 +414,7 @@ public partial class DehackedDefinition
 
         parser.ConsumeString();
         parser.Consume('=');
-        int value = parser.ConsumeInteger();
+        int value = ConsumeDehackedInteger(parser);
 
         switch (index)
         {
@@ -947,14 +947,20 @@ public partial class DehackedDefinition
 
         // Dehacked parsers used sscanf which would read until a non digit was hit.
         // Consume int expects the entire token to be an integer.
+        return ConsumeDehackedInteger(parser);
+    }
+
+    private static int ConsumeDehackedInteger(SimpleParser parser)
+    {
         string data = parser.ConsumeString();
         int end = 0;
+        if (data[0] == '-')
+            end++;
         while (end < data.Length && char.IsDigit(data[end]))
             end++;
 
         if (!int.TryParse(data.AsSpan(0, end), out int i))
             throw new Exception($"Expected an integer but got {data}");
-
         return i;
     }
 
