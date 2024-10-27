@@ -63,3 +63,4 @@
   - Fix A_KeenDie to call A_Fall (fixes blocking alien eggs in Tricking & Tearing at Warpspeed MAP05)
   - Fix transfer heights flats not rendering with emulate vanilla rendering
   - Fix transparent sprites discarding two-sided middle walls with emulate vanilla rendering
+  - Fix dehacked parsing for frame args to match dehacked parsing behavior for bad integer strings
