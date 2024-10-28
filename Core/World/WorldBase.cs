@@ -1368,13 +1368,14 @@ public abstract partial class WorldBase : IWorld
         
         Vec3D testPos = projectile.Position;
         if (projectile.Properties.MissileMovementSpeed > 0)
-            testPos += Vec3D.UnitSphere(angle, pitch) * (shooter.Radius - 2.0);
+            testPos += Vec3D.UnitSphere(angle, pitch) * (speed * 1.5);
 
         // TryMoveXY will use the velocity of the projectile
         // A projectile spawned where it can't fit can cause BlockingSectorPlane or BlockingEntity (IsBlocked = true)
         if (!projectile.IsBlocked() && PhysicsManager.TryMoveXY(projectile, testPos.X, testPos.Y).Success)
         {
             projectile.Position = testPos;
+            projectile.PrevPosition = testPos;
             projectile.Velocity = velocity;
             return projectile;
         }
