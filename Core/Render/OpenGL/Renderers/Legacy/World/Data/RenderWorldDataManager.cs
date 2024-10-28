@@ -72,6 +72,11 @@ public class RenderWorldDataManager : IDisposable
         m_lookup.Get(GeometryType.AlphaWall).Draw();
     }
 
+    public bool HasAlphaWalls()
+    {
+        return m_lookup.Get(GeometryType.AlphaWall).RenderData.Count > 0;
+    }
+
     public void RenderFlats()
     {
         m_lookup.Get(GeometryType.Flat).Draw();
