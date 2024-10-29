@@ -15,6 +15,7 @@
   - Gamma correction
   - Sound velocity option
   - Option to control filter type for virtual screen scaling
+  - xBRZ upscaling option for menu and HUD text elements
 
 ## Bug fixes:
   - Fix various issues with intermission screen and end-game screen formatting, including use of widescreen assets, text flow, alignment, pillarbox masking on scrolling finales
