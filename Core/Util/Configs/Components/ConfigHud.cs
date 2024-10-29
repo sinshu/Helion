@@ -77,7 +77,7 @@ public class AutomapLineColors(bool overlay)
     
     [ConfigInfo("Exit line color for the automap.")]
     [OptionMenu(OptionSectionType.Automap, "Exit Line Color")]
-    public readonly ConfigValue<Vec3I> ExitLineColor = new((0x00, 0xFF, 0xFF), ClampColor);
+    public readonly ConfigValue<Vec3I> ExitLineColor = new((0xFF, 0x00, 0x00), ClampColor);
 
     [ConfigInfo("Player color for the automap.")]
     [OptionMenu(OptionSectionType.Automap, "Player Color")]
