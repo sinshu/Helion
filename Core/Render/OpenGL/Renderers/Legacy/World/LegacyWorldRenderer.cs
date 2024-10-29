@@ -319,10 +319,18 @@ public class LegacyWorldRenderer : WorldRenderer
         m_entityRenderer.RenderNonAlpha(renderInfo);
         m_entityRenderer.RenderAlpha(renderInfo);
 
-        m_interpolationProgram.Bind();
-        GL.ActiveTexture(TextureUnit.Texture0);
-        m_worldDataManager.RenderAlphaWalls();
-        m_interpolationProgram.Unbind();
+        if (m_worldDataManager.HasAlphaWalls())
+        {   
+            // Draw flats to depth buffer so two-sided middle walls won't bleed through flats
+            GL.ColorMask(false, false, false, false);
+            RenderFlats(renderInfo);
+            GL.ColorMask(true, true, true, true);
+
+            m_interpolationProgram.Bind();
+            GL.ActiveTexture(TextureUnit.Texture0);
+            m_worldDataManager.RenderAlphaWalls();
+            m_interpolationProgram.Unbind();
+        }
 
         m_primitiveRenderer.Render(renderInfo);
     }

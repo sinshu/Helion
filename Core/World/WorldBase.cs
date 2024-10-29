@@ -1375,11 +1375,13 @@ public abstract partial class WorldBase : IWorld
         if (!projectile.IsBlocked() && PhysicsManager.TryMoveXY(projectile, testPos.X, testPos.Y).Success)
         {
             projectile.Position = testPos;
+            projectile.PrevPosition = testPos;
             projectile.Velocity = velocity;
             return projectile;
         }
 
         projectile.Position = testPos;
+        projectile.PrevPosition = testPos;
         HandleEntityHit(projectile, velocity, null);
         return null;
     }
