@@ -35,6 +35,7 @@ public class LegacyAutomapRenderer : IDisposable
     private readonly DynamicArray<vec2> m_points = new();
     private readonly AutomapColorPoints m_colorPoints = new();
     private readonly HashSet<int> m_teleportLines = new();
+    private readonly HashSet<int> m_exitLines = new();
     private float m_offsetX;
     private float m_offsetY;
     private int m_lastOffsetX;
@@ -49,6 +50,7 @@ public class LegacyAutomapRenderer : IDisposable
     private Color m_twoSidedWallColor;
     private Color m_unseenWallColor;
     private Color m_teleportLineColor;
+    private Color m_exitLineColor;
 
     private Color m_playerColor;
     private Color m_thingColor;
@@ -67,6 +69,7 @@ public class LegacyAutomapRenderer : IDisposable
         m_twoSidedWallColor = new(colors.TwoSidedWallColor.Value);
         m_unseenWallColor = new(colors.UnseenWallColor.Value);
         m_teleportLineColor = new(colors.TeleportLineColor.Value);
+        m_exitLineColor = new(colors.ExitLineColor.Value);
         m_playerColor = new(colors.PlayerColor.Value);
         m_thingColor = new(colors.ThingColor.Value);
         m_pickupColor = new(colors.PickupColor.Value);
@@ -143,11 +146,14 @@ public class LegacyAutomapRenderer : IDisposable
     public void UpdateTo(IWorld world)
     {
         m_teleportLines.Clear();
+        m_exitLines.Clear();
 
         foreach (var line in world.Lines)
         {
             if (line.Special.IsTeleport())
                 m_teleportLines.Add(line.Id);
+            if (line.Special.IsExitSpecial())
+                m_exitLines.Add(line.Id);
         }
     }
 
@@ -322,8 +328,11 @@ public class LegacyAutomapRenderer : IDisposable
             return GetMarkedColor(world);
 
         if (line.SeenForAutomap || forceDraw)
-            return m_wallColor;
-
+            if (m_exitLines.Contains(line.Id))
+                return m_exitLineColor;
+            else
+                return m_wallColor;
+        
         return m_unseenWallColor;
     }
 
@@ -336,6 +345,8 @@ public class LegacyAutomapRenderer : IDisposable
         {
             if (m_teleportLines.Contains(line.Id))
                 return m_teleportLineColor;
+            if (m_exitLines.Contains(line.Id))
+                return m_exitLineColor;
 
             return m_twoSidedWallColor;
         }

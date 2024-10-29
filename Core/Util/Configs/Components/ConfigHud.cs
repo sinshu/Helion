@@ -63,7 +63,7 @@ public class AutomapLineColors(bool overlay)
     [OptionMenu(OptionSectionType.Automap, "Wall Color")]
     public readonly ConfigValue<Vec3I> WallColor = new(overlay ? (0, 0xFF, 0) : (0xFF, 0xFF, 0xFF), ClampColor);
 
-    [ConfigInfo("One-sided wall color for the automap.")]
+    [ConfigInfo("Two-sided wall color for the automap.")]
     [OptionMenu(OptionSectionType.Automap, "Two-sided Wall Color")]
     public readonly ConfigValue<Vec3I> TwoSidedWallColor = new(overlay ? (0, 0x80, 0) : (0x80, 0x80, 0x80), ClampColor);
 
@@ -74,6 +74,10 @@ public class AutomapLineColors(bool overlay)
     [ConfigInfo("Teleport line color for the automap.")]
     [OptionMenu(OptionSectionType.Automap, "Teleport Line Color")]
     public readonly ConfigValue<Vec3I> TeleportLineColor = new(overlay ? (0xFF, 0x00, 0xFF) : (0x00, 0xFF, 0x00), ClampColor);
+    
+    [ConfigInfo("Exit line color for the automap.")]
+    [OptionMenu(OptionSectionType.Automap, "Exit Line Color")]
+    public readonly ConfigValue<Vec3I> ExitLineColor = new((0x00, 0xFF, 0xFF), ClampColor);
 
     [ConfigInfo("Player color for the automap.")]
     [OptionMenu(OptionSectionType.Automap, "Player Color")]
