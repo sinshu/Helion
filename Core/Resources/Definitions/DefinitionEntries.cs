@@ -64,6 +64,7 @@ public class DefinitionEntries
     public readonly Id24SkyDefinition Id24SkyDefinition = new();
     public readonly Id24TranslationDefinition Id24TranslationDefinition = new();
     public readonly GameConfDefinition GameConfDefinition = new();
+    public PnamesTextureXCollection PnamesTextureXCollection => m_pnamesTextureXCollection;
 
     public DehackedDefinition? DehackedDefinition { get; set; }
 
