@@ -344,6 +344,9 @@ public partial class TextureManager : ITickable
     private bool TryCreateTextureFromPatch(string name, out Texture? texture)
     {
         texture = null;
+        if (!m_archiveCollection.Definitions.PnamesTextureXCollection.HasPatch(name))
+            return false;
+
         var image = m_archiveCollection.ImageRetriever.GetOnly(name, ResourceNamespace.Global);
         if (image == null)
             return false;

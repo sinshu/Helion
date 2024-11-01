@@ -86,27 +86,21 @@ public static class DoomGeometryBuilder
         Side front = new(nextSideId, doomSide.Offset, upper, middle, lower, sector);
         builder.Sides.Add(front);
 
-        SetColorMaps(doomLine, textureManager, doomSide, middleTexture, upperTexture, lowerTexture, front, true);
+        SetColorMaps(doomLine, textureManager, doomSide, front, true);
 
         nextSideId++;
 
         return (front, null);
     }
 
-    private static void SetColorMaps(DoomLine doomLine, TextureManager textureManager, DoomSide doomSide, Texture middleTexture, Texture upperTexture, Texture lowerTexture, Side front, bool oneSided)
+    private static void SetColorMaps(DoomLine doomLine, TextureManager textureManager, DoomSide doomSide, Side front, bool oneSided)
     {
         // Boom only allows transfer heights colormaps for one-sided lines?
         if (oneSided && doomLine.LineType == VanillaLineSpecialType.TransferHeights)
         {
-            Colormap? upperColormap = null;
-            Colormap? middleColormap = null;
-            Colormap? lowerColormap = null;
-            if (upperTexture.Index == Constants.NoTextureIndex)
-                textureManager.TryGetColormap(doomSide.UpperTexture, out upperColormap);
-            if (middleTexture.Index == Constants.NoTextureIndex)
-                textureManager.TryGetColormap(doomSide.MiddleTexture, out middleColormap);
-            if (lowerTexture.Index == Constants.NoTextureIndex)
-                textureManager.TryGetColormap(doomSide.LowerTexture, out lowerColormap);
+            textureManager.TryGetColormap(doomSide.UpperTexture, out var upperColormap);
+            textureManager.TryGetColormap(doomSide.MiddleTexture, out var middleColormap);
+            textureManager.TryGetColormap(doomSide.LowerTexture, out var lowerColormap);
 
             if (upperColormap != null || middleColormap != null || lowerColormap != null)
                 front.Colormaps = new(upperColormap, middleColormap, lowerColormap);
@@ -152,7 +146,7 @@ public static class DoomGeometryBuilder
         Side side = new(nextSideId, facingSide.Offset, upper, middle, lower, facingSector);
         builder.Sides.Add(side);
 
-        SetColorMaps(line, textureManager, facingSide, middleTexture, upperTexture, lowerTexture, side, false);
+        SetColorMaps(line, textureManager, facingSide, side, false);
 
         nextSideId++;
         return side;

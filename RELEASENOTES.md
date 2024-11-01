@@ -66,3 +66,4 @@
   - Fix transparent sprites discarding two-sided middle walls with emulate vanilla rendering
   - Fix dehacked parsing for frame args to match dehacked parsing behavior for bad integer strings
   - Fix projectile spawn not setting previous position causing the first frame to interpolate very close to the screen
+  - Fix transfer height colormaps not being applied if the colormap passes as a valid doom image (fixes twogers MAP36)
