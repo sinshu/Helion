@@ -1,7 +1,7 @@
 # 0.9.6.0 (Pre-release)
 
 ## Features:
-  - Placeholder
+  - Enable trimming (reduces file size of release artifacts)
 
 ## Bug fixes:
   - Placeholder
