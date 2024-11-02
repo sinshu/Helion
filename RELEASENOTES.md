@@ -1,69 +1,7 @@
-# 0.9.5.0 (Pre-release)
+# 0.9.6.0 (Pre-release)
 
 ## Features:
-  - Initial id24 specification support
-  - SoundFont picker dialog
-  - Minor usability improvement to options menus (can see and restore defaults)
-  - Status bar texture picker dialog
-  - Added automap marker functionality to key binding options
-  - "Melt" screen wipe added
-  - Save game improvements: Saves can be named, pagination added to Save/Load dialog, rotating auto/quicksaves added
-  - Expanded support for music formats and more synthesizer options, via ZMusic
-  - Game controller support
-  - TRANSLATION1 and TRANSLATION2 flag support for true-color rendering
-  - ENDOOM text screen on quit
-  - Gamma correction
-  - Sound velocity option
-  - Option to control filter type for virtual screen scaling
-  - xBRZ upscaling option for menu and HUD text elements
+  - Placeholder
 
 ## Bug fixes:
-  - Fix various issues with intermission screen and end-game screen formatting, including use of widescreen assets, text flow, alignment, pillarbox masking on scrolling finales
-  - Interpolate weapon raise/lower animations and chainsaw bobbing
-  - Prevent mouse vertical movement from causing the player to move when mouselook is enabled
-  - Fix issues related to building on case-sensitive file systems (Linux)
-  - Fix rendering order for two-sided middle walls that could cause flats/walls behind not to render
-  - Fix boom WR lock door lines from constantly triggering key messages when contacting
-  - Fix two-sided middle scrolling to offset entire texture by the Y value when rendering to match original doom behavior
-  - Fix visual scroll offsets not being restored from a save for walls and flats
-  - Fix instant sector floors not raising when two monsters are overlapping
-  - Fix A_BfgSpray to be created after damage so they are rendered at corpse height if a monster is killed.
-  - Fix issue with screenshot command not being processed.
-  - Various fixes around key bindings saved to config file
-  - Fix an issue that caused the process' working set to grow rapidly on level changes
-  - Fix max ammo display on status bar in PWADs that modify this property
-  - Fix rendering of taller fonts
-  - Fix issue with clearing multiple automap markers
-  - Fix self-referencing sectors to not block hitscan attacks and line of sight checks to match original doom behavior
-  - Fix boom silent teleport specials to keep height from floor
-  - Add missing PLS1EXP5 dehacked lookup (fixes decoration in Frozen Heart)
-  - Map dehacked TRANSLATION bit memnomic to TRANSLATION1
-  - Fix dehacked frame misc1/2 to correctly set weapon sprite offsets through the weapon frame state only
-  - Fix rendering that would stop sprites from rendering behind two-sided transparent walls when not using emulate vanilla rendering
-  - Fix monsters infighting too easily
-  - Improve detection of WADs installed from Steam 
-  - Separate HUD and menu scaling into two different options
-  - Fix incorrect dehacked mapping for BEXP5
-  - Rework FluidSynth loading sequence to prevent a crash on some systems and speed up music track changes
-  - Prevent user from overwriting autosaves via quick save
-  - Fix issue with savegame compatibility settings persisting to user config
-  - Fix MusicChangers breaking when loading saves
-  - Fix random crash from sounds trying to play while loading a new map
-  - Fix dehacked to correctly use A_SPosAttack function with hard-coded shotgun sound
-  - Fix map start specials not getting written to autosaves
-  - Fix boom generic specials to allow monsters to trigger of off model if change is 0
-  - Fix various UMAPINFO issues dealing with nointermission intertext, intertextsecret, endgame, endpic, and intermusic
-  - Fix berserk only restoring to initial health when modified through dehacked
-  - Fix OpenGL context using 3.3 with Intel iGPUs when a higher version is supported
-  - Fix dehacked level string replacement for automap/console/loading displays
-  - Fix reversed x/y scroll values for MBF21 1024 scroll special
-  - Fix velocity being set for certain sounds and not cleared that can cause pitch variations
-  - Fix MAP24 sky rendering issue during ship fire sequence for Eviternity II final
-  - Fix MAPINFO/ZMAPINFO defaultmap clearing properties (fixes Eviternity MAP30 endgame sequence)
-  - Fix clicking/popping noises in WAV audio files (credit: sinshu)
-  - Fix A_KeenDie to call A_Fall (fixes blocking alien eggs in Tricking & Tearing at Warpspeed MAP05)
-  - Fix transfer heights flats not rendering with emulate vanilla rendering
-  - Fix transparent sprites discarding two-sided middle walls with emulate vanilla rendering
-  - Fix dehacked parsing for frame args to match dehacked parsing behavior for bad integer strings
-  - Fix projectile spawn not setting previous position causing the first frame to interpolate very close to the screen
-  - Fix transfer height colormaps not being applied if the colormap passes as a valid doom image (fixes twogers MAP36)
+  - Placeholder
