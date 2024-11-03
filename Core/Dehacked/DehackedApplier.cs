@@ -979,7 +979,7 @@ public class DehackedApplier
             var normalAmmo = composer.GetByName(dehacked.AmmoNames[ammo.AmmoNumber]);
             var boxAmmo = composer.GetByName(dehacked.AmmoDoubleNames[ammo.AmmoNumber]);
             ApplyAmmo(normalAmmo, ammo, 1);
-            ApplyAmmo(boxAmmo, ammo, 2);
+            ApplyAmmo(boxAmmo, ammo, 5);
             ApplyId24Ammo(composer, normalAmmo, boxAmmo, ammo);
 
             if (ammo.AmmoNumber >= weaponDefs.Count)
@@ -1068,7 +1068,7 @@ public class DehackedApplier
         if (ammo.PerAmmo.HasValue)
         {
             inventory.Amount = ammo.PerAmmo.Value * multiplier;
-            definition.Properties.Ammo.BackpackAmount = ammo.PerAmmo.Value * multiplier;
+            definition.Properties.Ammo.BackpackAmount = ammo.PerAmmo.Value;
         }
 
         if (ammo.MaxAmmo.HasValue)
