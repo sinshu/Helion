@@ -64,6 +64,10 @@ public class Colormap
 
     public static Colormap? From(Palette palette, byte[] data, Entry? entry)
     {
+        // Must have at least one layer
+        if (data.Length < NumColors)
+            return null;
+
         Vec3I addColors = Vec3I.Zero;
         List<Color[]> colormapLayers = new(NumLayers);
         List<byte[]> colormapLayerIndices = new(NumLayers);
@@ -113,6 +117,7 @@ public class Colormap
 
         var colorMix = addColors.Float / NumColors;
         colorMix.Normalize();
+
         return new(colormapLayers, colormapLayerIndices, colorMix, entry, fullBright);
     }
 
