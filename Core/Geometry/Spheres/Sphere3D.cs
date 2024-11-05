@@ -31,8 +31,6 @@ public struct Sphere3D
     public static bool operator !=(Sphere3D self, Sphere3D other) => !(self == other);
 
     public Vec3D ToPoint(double yaw, double pitch) => (Vec3D.UnitSphere(yaw, pitch) * Radius) + Origin;
-    public bool Contains(Vec3D point) => Origin.Distance(point) <= Radius;
-    public bool Contains(Vector3D point) => Origin.Distance(point) <= Radius;
 
     public bool Intersects(Sphere3D other)
     {
