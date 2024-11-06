@@ -28,6 +28,9 @@ public class EntityProgram : RenderProgram
     private readonly int m_colorMapIndexLocation;
     private readonly int m_lightModeLocation;
     private readonly int m_gammaCorrectionLocation;
+    private readonly int m_maxDistanceLocation;
+    private readonly int m_fadeDistanceLocation;
+    private readonly int m_viewPosLocation;
 
     public EntityProgram() : base("Entity")
     {
@@ -50,6 +53,9 @@ public class EntityProgram : RenderProgram
         m_colorMapIndexLocation = Uniforms.GetLocation("colormapIndex");
         m_lightModeLocation = Uniforms.GetLocation("lightMode");
         m_gammaCorrectionLocation = Uniforms.GetLocation("gammaCorrection");
+        m_maxDistanceLocation = Uniforms.GetLocation("maxDistanceSquared");
+        m_fadeDistanceLocation = Uniforms.GetLocation("fadeDistance");
+        m_viewPosLocation = Uniforms.GetLocation("viewPos");
     }
     
     public void BoundTexture(TextureUnit unit) => Uniforms.Set(unit, m_boundTextureLocation);
@@ -71,6 +77,9 @@ public class EntityProgram : RenderProgram
     public void ColorMapIndex(int index) => Uniforms.Set(index, m_colorMapIndexLocation);
     public void LightMode(RenderLightMode mode) => Uniforms.Set((int)mode, m_lightModeLocation);
     public void GammaCorrection(float value) => Uniforms.Set(value, m_gammaCorrectionLocation);
+    public void MaxDistanceSquared(float value) => Uniforms.Set(value, m_maxDistanceLocation);
+    public void FadeDistance(float value) => Uniforms.Set(value, m_fadeDistanceLocation);
+    public void ViewPos(Vec3F pos) => Uniforms.Set(pos, m_viewPosLocation);
 
     protected override string VertexShader() => @"
         #version 330
@@ -131,6 +140,7 @@ public class EntityProgram : RenderProgram
         out vec2 uvFrag;
         out float dist;
         out float fuzzDist;
+        out float renderDistSquared;
         flat out float lightLevelFrag;
         flat out float alphaFrag;
         flat out float fuzzFrag;
@@ -143,6 +153,12 @@ public class EntityProgram : RenderProgram
         uniform vec2 prevViewRightNormal;
         uniform sampler2D boundTexture;
         uniform float timeFrac;
+        uniform vec3 viewPos;
+
+        float distSquared(vec2 v1, vec2 v2) {
+            vec2 length = v1.xy - v2.xy;
+            return (length.x * length.x) + (length.y * length.y);
+        }
 
         void main()
         {
@@ -165,6 +181,8 @@ public class EntityProgram : RenderProgram
             vec4 glPosMin = mvp * vec4(minPos.x, minPos.y, minPos.z, 1);
             vec4 glPosMax = mvp * vec4(maxPos.x, maxPos.y, maxPos.z, 1);
             fuzzDist = (glPosMin.${Depth} + glPosMax.${Depth}) / 2;
+            // Render distance squared in 2d space for fade in/out effect
+            renderDistSquared = distSquared(viewPos.xy, pos.xy);
 
             gl_Position = glPosMin;
             dist = (mvpNoPitch * vec4(minPos.x, minPos.y, minPos.z, 1)).${Depth};
@@ -219,6 +237,7 @@ public class EntityProgram : RenderProgram
         in vec2 uvFrag;
         in float dist;
         in float fuzzDist;
+        in float renderDistSquared;
         flat in float lightLevelFrag;
         flat in float alphaFrag;
         flat in float fuzzFrag;
@@ -241,6 +260,8 @@ public class EntityProgram : RenderProgram
         uniform int colormapIndex;
         uniform int lightMode;
         uniform float gammaCorrection;
+        uniform float maxDistanceSquared;
+        uniform float fadeDistance;
 
         ${FuzzFunction}
 
@@ -249,6 +270,11 @@ public class EntityProgram : RenderProgram
             ${LightLevelFragFunction}
             ${SectorColorMapFragFunction}
             ${FragColorFunction}
+
+            if (renderDistSquared > maxDistanceSquared - fadeDistance) {
+                float fade = (maxDistanceSquared - renderDistSquared) / fadeDistance;
+                fragColor.a *= fade;
+            }
         }
     "
     .Replace("${LightLevelFragFunction}", LightLevel.FragFunction)
