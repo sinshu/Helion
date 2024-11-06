@@ -52,6 +52,13 @@ public class Weapon : InventoryItem, ITickable
             AmmoSprite = string.Empty;
     }
 
+    public void SetFlashState(EntityFrame frame)
+    {
+        Owner.WeaponFlashState = true;
+        FlashState.SetState(frame);
+        Owner.WeaponFlashState = false;
+    }
+
     public void RequestFire()
     {
         m_tryingToFire = true;
