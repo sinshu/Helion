@@ -3026,7 +3026,7 @@ public static class EntityActionFunctions
 
         var entityFrameTable = WorldStatic.World.ArchiveCollection.Definitions.EntityFrameTable;
         if (entityFrameTable.VanillaFrameMap.TryGetValue(state, out EntityFrame? newFrame))
-            weapon.FlashState.SetState(newFrame);
+            weapon.SetFlashState(newFrame);
     }
 
     private static void A_WeaponAlert(Entity entity)
@@ -3409,7 +3409,12 @@ public static class EntityActionFunctions
             return false;
         }
 
-        frame = entity.PlayerObj.Weapon.FrameState.Frame;
+        var weapon = entity.PlayerObj.Weapon;
+        if (entity.PlayerObj.WeaponFlashState)
+            frame = weapon.FlashState.Frame;
+        else
+            frame = weapon.FrameState.Frame;
+
         return true;
     }
 
