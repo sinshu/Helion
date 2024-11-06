@@ -3,6 +3,7 @@
 ## Features:
   - Enable trimming (reduces file size of release artifacts)
   - Allow interpolation to finish when game is paused and on level exit for smooth transitions
+  - Fade sprites into max distance
 
 ## Bug fixes:
   - Fix per ammo values for box ammo and backpack amount from dehacked patch

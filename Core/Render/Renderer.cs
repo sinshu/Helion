@@ -192,11 +192,15 @@ public partial class Renderer : IDisposable
             }
         }
 
+        int maxDistance = config.Render.MaxDistance.Value;
+        if (maxDistance <= 0)
+            maxDistance = Constants.DefaultMaxDistance;
+
         return new ShaderUniforms(CalculateMvpMatrix(renderInfo),
             CalculateMvpMatrix(renderInfo, true),
             GetTimeFrac(), drawInvulnerability, mix, extraLight, GetDistanceOffset(renderInfo),
             colorMix, GetFuzzDiv(renderInfo.Config, renderInfo.Viewport), colorMapUniforms, paletteIndex, config.Render.LightMode, 
-            (float)config.Render.GammaCorrection);
+            (float)config.Render.GammaCorrection, maxDistance);
     }
 
     private static PaletteIndex GetPalette(IConfig config, Player player)
