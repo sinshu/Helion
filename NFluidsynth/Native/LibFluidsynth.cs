@@ -6,16 +6,22 @@ namespace NFluidsynth.Native
 {
     internal static partial class LibFluidsynth
     {
-        public const string LibraryName = "fluidsynth";
-        private static bool RegisteredResolver;
-        private static IntPtr m_dllHandle = IntPtr.Zero;
-
         // Supports both ABI 2 and ABI 3 of Fluid Synth
         // https://abi-laboratory.pro/index.php?view=timeline&l=fluidsynth
         public static int LibraryVersion { get; private set; } = 3;
 
         public const int FluidOk = 0;
         public const int FluidFailed = -1;
+
+#if LINUX
+        public const string LibraryName = "libfluidsynth.so.3";
+#else
+        public const string LibraryName = "fluidsynth-3.dll";
+#endif
+
+#if !LINUX && !WINDOWS
+        private static bool RegisteredResolver;
+        private static IntPtr m_dllHandle = IntPtr.Zero;
 
         static LibFluidsynth()
         {
@@ -49,7 +55,7 @@ namespace NFluidsynth.Native
         {
 #pragma warning disable IDE0046 // if/else collapsing produces very dense code here
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                return ["fluidsynth.dll", "fluidsynth64.dll", "libfluidsynth.dll", "libfluidsynth64.dll"];
+                return ["fluidsynth.dll", "fluidsynth64.dll", "libfluidsynth.dll", "libfluidsynth64.dll", "fluidsynth-3.dll"];
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 return ["libfluidsynth.so", "libfluidsynth.so.2", "libfluidsynth.so.3", "fluidsynth.so", "fluidsynth.so.2", "fluidsynth.so.3"];
@@ -105,5 +111,6 @@ namespace NFluidsynth.Native
 
             return IntPtr.Zero;
         }
+#endif
     }
 }

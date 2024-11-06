@@ -9,7 +9,8 @@ public record struct ColorMapUniforms(int GlobalIndex, int SkyIndex, int SectorI
 public record struct ColorMixUniforms(Vec3F Global, Vec3F Sky, Vec3F Sector);
 
 public struct ShaderUniforms(mat4 mvp, mat4 mvpNoPitch, float timeFrac, bool drawInvulnerability, float mix, int extraLight, float distanceOffset,
-    ColorMixUniforms colorMix, float fuzzDiv, ColorMapUniforms colorMapUniforms, PaletteIndex paletteIndex, RenderLightMode lightMode, float gammaCorrection)
+    ColorMixUniforms colorMix, float fuzzDiv, ColorMapUniforms colorMapUniforms, PaletteIndex paletteIndex, RenderLightMode lightMode, float gammaCorrection,
+    int maxDistance)
 {
     public mat4 Mvp = mvp;
     public mat4 MvpNoPitch = mvpNoPitch;
@@ -24,4 +25,5 @@ public struct ShaderUniforms(mat4 mvp, mat4 mvpNoPitch, float timeFrac, bool dra
     public PaletteIndex PaletteIndex = paletteIndex;
     public RenderLightMode LightMode = lightMode;
     public float GammaCorrection = gammaCorrection;
+    public int MaxDistance = maxDistance;
 }

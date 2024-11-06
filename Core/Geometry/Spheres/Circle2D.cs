@@ -34,9 +34,7 @@ public struct Circle2D
 
     public Vec2D ToPoint(double radians) => (Vec2D.UnitCircle(radians) * Radius) + Origin;
     public bool Contains(Vec2D point) => Origin.Distance(point) <= Radius;
-    public bool Contains(Vector2D point) => Origin.Distance(point) <= Radius;
     public bool Contains(Vec3D point) => Origin.Distance(point.XY) <= Radius;
-    public bool Contains(Vector3D point) => Origin.Distance(point.XY) <= Radius;
 
     public bool Intersects(Circle2D other)
     {

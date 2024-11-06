@@ -15,8 +15,33 @@
     <SelfContained>True</SelfContained>
     <PublishSingleFile>True</PublishSingleFile>
     <PublishReadyToRun>True</PublishReadyToRun>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile >
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(AOT)' == 'true'">
+    <PublishAot>true</PublishAot>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <!-- See https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/docs/optimizing.md for instruction set info -->
+    <!-- x86-x64-v3: Haswell and newer (~2013) with FMA and AVX2.  x86-64-v4: AVX-512 required. -->
+    <IlcInstructionSet>x86-x64-v3</IlcInstructionSet>
+    <!-- NLog tries to get the path incorrectly -->
+    <NoWarn>$(NoWarn);IL3000;IL3002</NoWarn>
+
+    <!-- Avoid copying symbols for release AOT builds, as these are miserable to debug even with symbols (and the files are huge) -->
+    <CopyOutputSymbolsToPublishDirectory Condition="'$(Configuration)'=='Release'">false</CopyOutputSymbolsToPublishDirectory>
+    <AllowedReferenceRelatedFileExtensions Condition="'$(Configuration)'=='Release'">none</AllowedReferenceRelatedFileExtensions>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(AOT)' == 'true'">
+    <DirectPInvoke Include="zmusic" />
+    <DirectPInvoke Include="fluidsynth" />
+    <DirectPInvoke Include="glfw3" />
+    <DirectPInvoke Condition="'$(RuntimeIdentifier)'=='win-x64'" Include="AL" />
+
+    <NativeLibrary Condition="'$(RuntimeIdentifier)'=='win-x64'" Include="Unmanaged\lib\win-x64\*.lib" />
+    <NativeLibrary Condition="'$(RuntimeIdentifier)'=='linux-x64'" Include="Unmanaged\lib\linux-x64\*.a" />
+  </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Debug'">
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
@@ -35,12 +60,12 @@
     <Content Include="$(ProjectDir)SoundFonts\*" Link="SoundFonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 
     <!-- FluidSynth and ZMusic native libs -->
-    <Content Include="$(ProjectDir)Unmanaged\**\*" Link="runtimes\%(RecursiveDir)\native\%(Filename)%(Extension)" Condition="'$(RuntimeIdentifier)' == ''" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="$(ProjectDir)Unmanaged\$(RuntimeIdentifier)\*" Link="%(Filename)%(Extension)" Condition="'$(RuntimeIdentifier)' != ''" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(ProjectDir)Unmanaged\binary\**\*" Link="runtimes\%(RecursiveDir)\native\%(Filename)%(Extension)" Condition="'$(RuntimeIdentifier)' == ''" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(ProjectDir)Unmanaged\binary\$(RuntimeIdentifier)\*.dll" Link="%(Filename)%(Extension)" Condition="'$(RuntimeIdentifier)' == 'win-x64'" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(ProjectDir)Unmanaged\binary\$(RuntimeIdentifier)\*.so*" Link="%(Filename)%(Extension)" Condition="'$(RuntimeIdentifier)' == 'linux-x64'" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenAL.Soft" Version="1.19.1" />
     <PackageReference Include="OpenTK" Version="4.7.4" />
   </ItemGroup>
 
@@ -53,7 +78,8 @@
   <Target Name="SetPublishDir" BeforeTargets="Build">
     <PropertyGroup>
       <PublishDir Condition="'$(SelfContainedRelease)' == 'true'">$(HelionRootDir)\Publish\$(RuntimeIdentifier)_SelfContained\</PublishDir>
-      <PublishDir Condition="'$(SelfContainedRelease)' != 'true'">$(HelionRootDir)\Publish\$(RuntimeIdentifier)\</PublishDir>
+      <PublishDir Condition="'$(AOT)' == 'true'">$(HelionRootDir)\Publish\$(RuntimeIdentifier)_AOT\</PublishDir>
+      <PublishDir Condition="'$(SelfContainedRelease)' != 'true' AND '$(AOT)' != 'true'">$(HelionRootDir)\Publish\$(RuntimeIdentifier)\</PublishDir>
     </PropertyGroup>
   </Target>
 

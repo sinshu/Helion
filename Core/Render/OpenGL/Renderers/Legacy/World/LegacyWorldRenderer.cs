@@ -132,9 +132,7 @@ public class LegacyWorldRenderer : WorldRenderer
         m_geometryRenderer.Clear(renderInfo.TickFraction, true);
         m_renderData.CheckCount = ++WorldStatic.CheckCounter;
 
-        m_renderData.MaxDistance = world.Config.Render.MaxDistance;
-        if (m_renderData.MaxDistance <= 0)
-            m_renderData.MaxDistance = 6000;
+        m_renderData.MaxDistance = renderInfo.Uniforms.MaxDistance;
 
         m_renderData.MaxDistanceSquared = m_renderData.MaxDistance * m_renderData.MaxDistance;
         m_renderData.OccludePos = m_occlude ? m_occludeViewPos : null;

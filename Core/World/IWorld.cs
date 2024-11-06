@@ -41,6 +41,7 @@ public delegate double GetTracerVelocityZ(Entity tracer, Entity target);
 public interface IWorld : IDisposable
 {
     event EventHandler<LevelChangeEvent>? LevelExit;
+    event EventHandler? LevelExiting;
     event EventHandler? WorldResumed;
     event EventHandler? ClearConsole;
     event EventHandler? OnResetInterpolation;

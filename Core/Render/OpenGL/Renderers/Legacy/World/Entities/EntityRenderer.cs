@@ -266,6 +266,12 @@ public class EntityRenderer : IDisposable
         m_program.ColorMapIndex(renderInfo.Uniforms.ColorMapUniforms.GlobalIndex);
         m_program.LightMode(renderInfo.Uniforms.LightMode);
         m_program.GammaCorrection(renderInfo.Uniforms.GammaCorrection);
+        m_program.ViewPos(renderInfo.Camera.Position);
+
+        // The fade distance calculations work using squared distances
+        float maxDistanceSquared = renderInfo.Uniforms.MaxDistance * renderInfo.Uniforms.MaxDistance;
+        m_program.MaxDistanceSquared(maxDistanceSquared);
+        m_program.FadeDistance(maxDistanceSquared / 2);
     }
 
     public void RenderAlpha(RenderInfo renderInfo)
