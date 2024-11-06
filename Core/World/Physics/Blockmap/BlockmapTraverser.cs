@@ -66,48 +66,52 @@ public class BlockmapTraverser
         int capacity = intersections.Capacity;
         BlockmapSegIterator<Block> it = BlockmapGrid.Iterate(seg);
         var block = it.Next();
+        var arrayData = intersections.Data;
 
-        fixed (BlockmapIntersect* startIntersect = &intersections.Data[0])
+        while (block != null)
         {
-            BlockmapIntersect* bi = startIntersect;
-            while (block != null)
+            int blockLineCount = block.BlockLineCount;
+            if (capacity < length + blockLineCount)
             {
-                int blockLineCount = block.BlockLineCount;
-                if (capacity < length + blockLineCount)
-                {
-                    intersections.EnsureCapacity(length + blockLineCount);
-                    capacity = intersections.Capacity;
-                }
+                intersections.EnsureCapacity(length + blockLineCount);
+                capacity = intersections.Capacity;
+            }
 
-                fixed (BlockLine* lineStart = &block.BlockLines[0])
+            fixed (BlockLine* lineStart = &block.BlockLines[0])
+            {
+                BlockLine* line = lineStart;
+                for (int i = 0; i < blockLineCount; i++, line++)
                 {
-                    BlockLine* line = lineStart;
-                    for (int i = 0; i < blockLineCount; i++, line++)
+                    if (seg.Intersection(line->Segment.Start.X, line->Segment.Start.Y, line->Segment.End.X, line->Segment.End.Y, out double t))
                     {
-                        if (seg.Intersection(line->Segment.Start.X, line->Segment.Start.Y, line->Segment.End.X, line->Segment.End.Y, out double t))
+                        if (m_checkedLines[line->LineId] == checkCounter)
+                            continue;
+
+                        m_checkedLines[line->LineId] = checkCounter;
+
+                        if (line->OneSided)
                         {
-                            if (m_checkedLines[line->LineId] == checkCounter)
-                                continue;
-
-                            m_checkedLines[line->LineId] = checkCounter;
-
-                            if (line->OneSided)
-                            {
-                                hitOneSidedLine = true;
-                                goto sightTraverseEndOfLoop;
-                            }
-
-                            bi->Line = line->Line;
-                            bi->Entity = null;
-                            bi->SegTime = t;
-                            bi++;
-                            length++;
+                            hitOneSidedLine = true;
+                            goto sightTraverseEndOfLoop;
                         }
+
+                        if (length >= intersections.Capacity)
+                        {
+                            intersections.EnsureCapacity(length + 1);
+                            arrayData = intersections.Data;
+                        }
+
+                        ref var bi = ref arrayData[length];
+                        bi.Line = line->Line;
+                        bi.Entity = null;
+                        bi.SegTime = t;
+                        length++;
                     }
                 }
-                block = it.Next();
             }
+            block = it.Next();
         }
+        
 
     sightTraverseEndOfLoop:
         if (hitOneSidedLine)
@@ -125,56 +129,65 @@ public class BlockmapTraverser
         int capacity = intersections.Capacity;
         BlockmapSegIterator<Block> it = BlockmapGrid.Iterate(seg);
         var block = it.Next();
+        var arrayData = intersections.Data;
 
-        fixed (BlockmapIntersect* startIntersect = &intersections.Data[0])
+        while (block != null)
         {
-            BlockmapIntersect* bi = startIntersect;
-            while (block != null)
+            fixed (BlockLine* lineStart = &block.BlockLines[0])
             {
-                fixed (BlockLine* lineStart = &block.BlockLines[0])
+                BlockLine* line = lineStart;
+                for (int i = 0; i < block.BlockLineCount; i++, line++)
                 {
-                    BlockLine* line = lineStart;
-                    for (int i = 0; i < block.BlockLineCount; i++, line++)
+                    if (seg.Intersection(line->Segment.Start.X, line->Segment.Start.Y, line->Segment.End.X, line->Segment.End.Y, out double t))
                     {
-                        if (seg.Intersection(line->Segment.Start.X, line->Segment.Start.Y, line->Segment.End.X, line->Segment.End.Y, out double t))
+                        if (m_checkedLines[line->LineId] == checkCounter)
+                            continue;
+
+                        m_checkedLines[line->LineId] = checkCounter;
+
+                        if (length >= intersections.Capacity)
                         {
-                            if (m_checkedLines[line->LineId] == checkCounter)
-                                continue;
-
-                            m_checkedLines[line->LineId] = checkCounter;
-
-                            bi->Line = line->Line;
-                            bi->Entity = null;
-                            bi->SegTime = t;
-                            bi++;
-                            length++;
+                            intersections.EnsureCapacity(length + 1);
+                            arrayData = intersections.Data;
                         }
-                    }
-                }
 
-                for (LinkableNode<Entity>? entityNode = block.Entities.Head; entityNode != null; entityNode = entityNode.Next)
-                {
-                    Entity entity = entityNode.Value;
-                    if (entity.BlockmapCount == checkCounter)
-                        continue;
-                    if (!entity.Flags.Shootable)
-                        continue;
-
-                    entity.BlockmapCount = checkCounter;
-                    if (entity.BoxIntersects(seg.Start, seg.End, ref intersect))
-                    {
-                        bi->Intersection = intersect;
-                        bi->Line = null;
-                        bi->Entity = entity;
-                        bi->SegTime = seg.ToTime(intersect);
-                        bi++;
+                        ref var bi = ref arrayData[length];
+                        bi.Line = line->Line;
+                        bi.Entity = null;
+                        bi.SegTime = t;
                         length++;
                     }
                 }
-                block = it.Next();
             }
-        }
 
+            for (LinkableNode<Entity>? entityNode = block.Entities.Head; entityNode != null; entityNode = entityNode.Next)
+            {
+                Entity entity = entityNode.Value;
+                if (entity.BlockmapCount == checkCounter)
+                    continue;
+                if (!entity.Flags.Shootable)
+                    continue;
+
+                entity.BlockmapCount = checkCounter;
+                if (entity.BoxIntersects(seg.Start, seg.End, ref intersect))
+                {
+                    if (length >= intersections.Capacity)
+                    {
+                        intersections.EnsureCapacity(length + 1);
+                        arrayData = intersections.Data;
+                    }
+
+                    ref var bi = ref arrayData[length];
+                    bi.Intersection = intersect;
+                    bi.Line = null;
+                    bi.Entity = entity;
+                    bi.SegTime = seg.ToTime(intersect);
+                    length++;
+                }
+            }
+            block = it.Next();
+        }
+        
         intersections.SetLength(length);
         intersections.Sort();
     }
