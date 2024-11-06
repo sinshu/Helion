@@ -1,4 +1,5 @@
 using Helion.Demo;
+using Helion.Util;
 using Helion.Util.Timing;
 using Helion.World;
 using Helion.World.Cheats;
@@ -83,6 +84,11 @@ public partial class WorldLayer
     private void TickWorld(TickerInfo tickerInfo)
     {
         m_lastTickInfo = tickerInfo;
+
+        // Force fraction to 1 to stop interpolation when setting FPS to the tick rate (35)
+        if (m_config.Render.MaxFPS == (int)Constants.TicksPerSecond)
+            m_lastTickInfo = new(tickerInfo.Ticks, 1);
+
         int ticksToRun = m_lastTickInfo.Ticks;
         World.AnyLayerObscuring = AnyLayerObscuring;
         TickCommand cmd = GetTickCommand();
@@ -110,6 +116,13 @@ public partial class WorldLayer
 
         if (ticksToRun <= 0)
             return;
+
+        // Lets the world interpolate until the next tick.
+        if (World.Paused || m_resetInterpolation)
+        {
+            m_resetInterpolation = false;
+            World.ResetInterpolation();
+        }
 
         if (ticksToRun > TickOverflowThreshold)
         {

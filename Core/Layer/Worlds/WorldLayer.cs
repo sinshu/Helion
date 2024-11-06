@@ -77,6 +77,7 @@ public partial class WorldLayer : IGameLayerParent
     private double m_autoMapScale;
     private bool m_disposed;
     private bool m_paused;
+    private bool m_resetInterpolation;
 
     private Player Player => World.Player;
     public bool ShouldFocus => !World.Paused || (World.IsChaseCamMode && !AnyLayerObscuring);
@@ -126,6 +127,13 @@ public partial class WorldLayer : IGameLayerParent
         RenderableStatLabels = [m_renderKillLabel, m_renderItemLabel, m_renderSecretLabel];
         RenderableStatValues = [m_renderKillString, m_renderItemString, m_renderSecretString];
         m_largeHudFont = GetFontOrDefault(LargeHudFont);
+
+        World.LevelExiting += World_LevelExiting;
+    }
+
+    private void World_LevelExiting(object? sender, EventArgs e)
+    {
+        m_resetInterpolation = true;
     }
 
     private RenderableString InitRenderableString(TextAlign align = TextAlign.Left) => 
@@ -322,6 +330,7 @@ public partial class WorldLayer : IGameLayerParent
         if (m_disposed)
             return;
 
+        World.LevelExiting -= World_LevelExiting;
         World.Dispose();
 
         Intermission?.Dispose();
