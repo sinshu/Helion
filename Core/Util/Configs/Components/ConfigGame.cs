@@ -63,6 +63,9 @@ public class ConfigGame: ConfigElement<ConfigGame>
     [OptionMenu(OptionSectionType.General, "Confirm Quicksave to Slot")]
     public readonly ConfigValue<bool> QuickSaveConfirm = new(true);
 
+    [ConfigInfo("Automatically create a quicksave every x seconds. 0 = never.")]
+    [OptionMenu(OptionSectionType.General, "Quicksave Seconds")]
+    public readonly ConfigValue<int> QuickSaveSeconds = new(0, GreaterOrEqual(0));
 
     // Cheats
 

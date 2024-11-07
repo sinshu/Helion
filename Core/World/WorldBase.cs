@@ -740,7 +740,6 @@ public abstract partial class WorldBase : IWorld
 
     public virtual void Tick()
     {
-        OnTick?.Invoke(this, EventArgs.Empty);
         DebugCheck();
 
         if (Paused)
@@ -751,6 +750,7 @@ public abstract partial class WorldBase : IWorld
         }
 
         Profiler.World.Total.Start();
+        OnTick?.Invoke(this, EventArgs.Empty);
 
         if (WorldState == WorldState.Exit)
         {

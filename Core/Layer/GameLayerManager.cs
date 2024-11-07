@@ -27,6 +27,7 @@ using Helion.Util.Profiling;
 using Helion.Util.Timing;
 using Helion.Window;
 using Helion.Window.Input;
+using Helion.World;
 using Helion.World.Impl.SinglePlayer;
 using Helion.World.Save;
 using System;
@@ -80,6 +81,7 @@ public class GameLayerManager : IGameLayerManager
     private Renderer m_renderer;
     private IRenderableSurfaceContext m_ctx;
     private IHudRenderContext m_hudRenderCtx;
+    private int m_quickSaveTicks;
     private bool m_disposed;
 
     private IEnumerable<IGameLayer> Layers => new List<IGameLayer?>
@@ -196,6 +198,8 @@ public class GameLayerManager : IGameLayerManager
             case WorldLayer layer:
                 Remove(WorldLayer);
                 WorldLayer = layer;
+                WorldLayer.World.OnTick += World_OnTick;
+                m_quickSaveTicks = 0;
                 break;
             case IwadSelectionLayer layer:
                 Remove(IwadSelectionLayer);
@@ -223,6 +227,26 @@ public class GameLayerManager : IGameLayerManager
         {
             gameLayer.OnShow();
             GameLayerAdded?.Invoke(this, gameLayer);
+        }
+    }
+
+    private void World_OnTick(object? sender, EventArgs e)
+    {
+        var seconds = m_config.Game.QuickSaveSeconds.Value;
+        if (seconds == 0 || sender is not SinglePlayerWorld singlePlayerWorld)
+        {
+            m_quickSaveTicks = 0;
+            return;
+        }
+
+        if (singlePlayerWorld.WorldState != WorldState.Normal)
+            return;
+
+        m_quickSaveTicks++;
+        if (m_quickSaveTicks >= seconds * (int)Constants.TicksPerSecond)
+        {
+            m_quickSaveTicks = 0;
+            WriteQuickSave();
         }
     }
 
@@ -303,6 +327,9 @@ public class GameLayerManager : IGameLayerManager
         }
         else if (ReferenceEquals(layer, WorldLayer))
         {
+            if (WorldLayer != null)
+                WorldLayer.World.OnTick -= World_OnTick;
+
             WorldLayer?.Dispose();
             WorldLayer = null;
         }
