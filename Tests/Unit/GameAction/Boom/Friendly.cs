@@ -1,9 +1,7 @@
 ﻿using FluentAssertions;
 using Helion.Geometry.Vectors;
 using Helion.Resources.IWad;
-using Helion.World.Entities;
 using Helion.World.Entities.Players;
-using Helion.World.Geometry.Lines;
 using Helion.World.Impl.SinglePlayer;
 using Xunit;
 
@@ -19,7 +17,7 @@ public class Friendly
 
     public Friendly()
     {
-        World = WorldAllocator.LoadMap("Resources/friendly.zip", "friendly.WAD", "MAP01", GetType().Name, (world) => { }, IWadType.Doom2);
+        World = WorldAllocator.LoadMap("Resources/friendly.zip", "friendly.wad", "MAP01", GetType().Name, (world) => { }, IWadType.Doom2);
     }
 
     [Fact(DisplayName = "Friendly monster not blocked by monster blocking line")]
