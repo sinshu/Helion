@@ -85,7 +85,7 @@ public static class BoomLineSpecTranslator
         compatibility = LineSpecialCompatibility.DefaultVanilla;
         lineActivationType = LineActivationType.Any;
 
-        if (special <= CrusherBase || special >= GenericEnd)
+        if (special < CrusherBase || special >= GenericEnd)
             return ZDoomLineSpecialType.None;
 
         ZDoomLineSpecialType type = ZDoomLineSpecialType.None;

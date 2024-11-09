@@ -1,4 +1,5 @@
 ﻿using FluentAssertions;
+using Helion.Util;
 using Helion.World;
 using Helion.World.Geometry.Sectors;
 using Helion.World.Special.SectorMovement;
@@ -9,14 +10,14 @@ namespace Helion.Tests.Unit.GameAction
 {
     public static partial class GameActions
     {
-        public static void RunCrusherCeiling(WorldBase world, Sector sector, int speed, bool slowDownOnCrush, double destZ = double.MaxValue, bool repeat = true, bool playSound = true) =>
-            RunCrusherPlane(world, sector, sector.Ceiling, speed, slowDownOnCrush, destZ, repeat, playSound);
+        public static void RunCrusherCeiling(WorldBase world, Sector sector, int speed, bool slowDownOnCrush, double destZ = double.MaxValue, bool repeat = true, bool playSound = true, bool assertDeadEntities = true) =>
+            RunCrusherPlane(world, sector, sector.Ceiling, speed, slowDownOnCrush, destZ, repeat, playSound, assertDeadEntities);
 
-        public static void RunCrusherFloor(WorldBase world, Sector sector, int speed, bool slowDownOnCrush, double destZ = double.MaxValue, bool repeat = true, bool playSound = true) =>
-            RunCrusherPlane(world, sector, sector.Floor, speed, slowDownOnCrush, destZ, repeat);
+        public static void RunCrusherFloor(WorldBase world, Sector sector, int speed, bool slowDownOnCrush, double destZ = double.MaxValue, bool repeat = true, bool playSound = true, bool assertDeadEntities = true) =>
+            RunCrusherPlane(world, sector, sector.Floor, speed, slowDownOnCrush, destZ, repeat, assertDeadEntities);
 
         public static void RunCrusherPlane(WorldBase world, Sector sector, SectorPlane plane, int speed, bool slowDownOnCrush,
-            double setDestZ = double.MaxValue, bool repeat = true, bool playSound = true)
+            double setDestZ = double.MaxValue, bool repeat = true, bool playSound = true, bool assertDeadEntities = true)
         {
             var moveSpecial = (sector.GetActiveMoveSpecial(plane)! as SectorMoveSpecial)!;
             MoveDirection startDir = sector.Ceiling.Equals(plane) ? MoveDirection.Down : MoveDirection.Up;
@@ -27,7 +28,7 @@ namespace Helion.Tests.Unit.GameAction
             if (setDestZ != double.MaxValue)
                 destZ = setDestZ;
             double move = startDir == MoveDirection.Down ? -GetMovementPerTick(speed) : GetMovementPerTick(speed);
-            double slowMove = startDir == MoveDirection.Down ? -0.1 : 0.1;
+            double slowMove = startDir == MoveDirection.Down ? -Constants.DoomSlowCrushSpeed : Constants.DoomSlowCrushSpeed;
 
             bool isCrushing = false;
 
@@ -56,11 +57,14 @@ namespace Helion.Tests.Unit.GameAction
                     moveSpecial.MoveSpeed.Should().Be(move);
             });
 
-            var node = sector.Entities.Head;
-            while (node != null)
+            if (assertDeadEntities)
             {
-                node.Value.IsDead.Should().BeTrue();
-                node = node.Next;
+                var node = sector.Entities.Head;
+                while (node != null)
+                {
+                    node.Value.IsDead.Should().BeTrue();
+                    node = node.Next;
+                }
             }
 
             if (!repeat)

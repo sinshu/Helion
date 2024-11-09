@@ -2352,15 +2352,14 @@ public static class EntityActionFunctions
         }
     }
 
-    private static void A_SkelMissile(Entity entity)
+    public static void A_SkelMissile(Entity entity)
     {
         if (entity.Target.Entity == null || WorldStatic.RevenantTracer == null)
             return;
 
         A_FaceTarget(entity);
-        Entity? fireball = FireEnemyProjectile(entity, entity.Target.Entity, WorldStatic.RevenantTracer, zOffset: 16);
-        if (fireball != null)
-            fireball.SetTracer(entity.Target.Entity);
+        var fireball = FireEnemyProjectile(entity, entity.Target.Entity, WorldStatic.RevenantTracer, zOffset: 16);
+        fireball?.SetTracer(entity.Target.Entity);
     }
 
     private static void A_SkelWhoosh(Entity entity)

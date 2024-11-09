@@ -4,6 +4,7 @@ using System.Reflection;
 using Helion.Audio;
 using Helion.Maps.Specials.ZDoom;
 using Helion.Models;
+using Helion.Util;
 using Helion.World.Entities;
 using Helion.World.Geometry.Lines;
 using Helion.World.Geometry.Sectors;
@@ -465,13 +466,13 @@ public class SectorMoveSpecial : ISectorSpecial
                 SetSectorDataChange();
                 IsCrushing = true;
                 if (MoveData.Crush != null && MoveData.Crush.Value.CrushMode == ZDoomCrushMode.DoomWithSlowDown)
-                    MoveSpeed = MoveSpeed < 0 ? -0.1 : 0.1;
+                    MoveSpeed = MoveSpeed < 0 ? -Constants.DoomSlowCrushSpeed : Constants.DoomSlowCrushSpeed;
                 break;
 
             case SectorMoveStatus.Success:
                 SetSectorDataChange();
                 break;
-        }
+        } 
 
         if (IsCrushing && MoveStatus == SectorMoveStatus.Success)
             IsCrushing = false;

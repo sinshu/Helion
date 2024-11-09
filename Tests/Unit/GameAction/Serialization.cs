@@ -12,6 +12,7 @@ using Xunit;
 using Helion.Geometry.Vectors;
 using Helion.World.Special;
 using Helion.World.Entities.Players;
+using Helion.World.Entities.Definition.States;
 
 namespace Helion.Tests.Unit.GameAction;
 
@@ -131,9 +132,8 @@ public class Serialization : IDisposable
         revenant.AngleRadians = GameActions.GetAngle(Bearing.South);
         GameActions.TickWorld(world, () => { return revenant.Target.Entity == null; }, () => { });
         revenant.Target.Entity.Should().Be(world.Player);
-        
-        GameActions.TickWorld(world, () => { return revenant.FrameState.Frame.ActionFunction?.Method.Name.Equals("A_SkelMissile") == false; },
-            () => { });
+
+        EntityActionFunctions.A_SkelMissile(revenant);
         var tracer = GameActions.GetEntity(world, "RevenantTracer");
         tracer.SetTracer(world.Player);
         tracer.Tracer.Entity.Should().Be(world.Player);

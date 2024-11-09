@@ -227,6 +227,13 @@ namespace Helion.Tests.Unit.GameAction
             return success;
         }
 
+        public static bool ActivateLineByTag(WorldBase world, Entity entity, int tag, ActivationContext context, bool fromFront = true)
+        {
+            var line = world.Lines.First(x => x.SectorTag == tag);
+            line.SetActivated(false);
+            return world.ActivateSpecialLine(entity, line, context, fromFront);
+        }
+
         // Activates the line given the context. Will force even if not repeatable.
         public static bool ActivateLine(WorldBase world, Entity entity, int lineId, ActivationContext context, bool fromFront = true)
         {
