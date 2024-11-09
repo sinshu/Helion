@@ -301,6 +301,8 @@ public static class Constants
     public const float DoomVirtualAspectRatio = 1.33333337f;
 
     public const int MaxTextureHeight = 16384;
+  
+    public const double DoomSlowCrushSpeed = 0.125;
 
     public static readonly int MaxSoundChannels = Enum.GetValues<SoundChannel>().Length;
 
