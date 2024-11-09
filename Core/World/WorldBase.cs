@@ -79,6 +79,7 @@ public abstract partial class WorldBase : IWorld
     private static DynamicArray<StructLine> LastStructLines = new();
 
     public event EventHandler<LevelChangeEvent>? LevelExit;
+    public event EventHandler? LevelExiting;
     public event EventHandler? WorldResumed;
     public event EventHandler? ClearConsole;
     public event EventHandler? OnResetInterpolation;
@@ -739,7 +740,6 @@ public abstract partial class WorldBase : IWorld
 
     public virtual void Tick()
     {
-        OnTick?.Invoke(this, EventArgs.Empty);
         DebugCheck();
 
         if (Paused)
@@ -750,12 +750,10 @@ public abstract partial class WorldBase : IWorld
         }
 
         Profiler.World.Total.Start();
+        OnTick?.Invoke(this, EventArgs.Empty);
 
         if (WorldState == WorldState.Exit)
         {
-            if (m_exitTicks == ExitTicks)
-                ResetInterpolation();
-
             SoundManager.Tick();
             m_exitTicks--;
 
@@ -955,7 +953,6 @@ public abstract partial class WorldBase : IWorld
             return;
 
         DrawPause = options.HasFlag(PauseOptions.DrawPause);
-        ResetInterpolation();
         SoundManager.Pause();
 
         Paused = true;
@@ -1146,6 +1143,7 @@ public abstract partial class WorldBase : IWorld
         // The exit ticks thing is fudge. Change random to secondary to not break demos later.
         m_random = SecondaryRandom;
         m_exitTicks = ExitTicks;
+        LevelExiting?.Invoke(this, EventArgs.Empty);
     }
 
     public Entity[] GetBossTargets()

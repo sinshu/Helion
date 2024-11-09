@@ -23,6 +23,7 @@ public class EntityRenderer : IDisposable
     private readonly EntityProgram m_program = new();
     private readonly RenderDataManager<EntityVertex> m_dataManager;
     private readonly Dictionary<Vec2D, int> m_renderPositions = new(1024, new Vec2DCompararer());
+    private readonly HashSet<SpritePosKey> m_spriteRenderPositions = new(1024);
     private readonly DynamicArray<SpriteDefinition?> m_spriteDefs = new(1024);
     private readonly SpriteRotation m_nullSpriteRotation;
     private Vec2F m_viewRightNormal;
@@ -66,6 +67,7 @@ public class EntityRenderer : IDisposable
     {
         m_dataManager.Clear();
         m_renderPositions.Clear();
+        m_spriteRenderPositions.Clear();
         m_spriteAlpha = m_config.Render.SpriteTransparency;
         m_spriteClip = m_config.Render.SpriteClip;
         m_spriteZCheck = m_config.Render.SpriteZCheck;
@@ -173,19 +175,24 @@ public class EntityRenderer : IDisposable
             rotation = CalculateRotation(viewAngle, entityAngle);
         }
 
+        
         if (m_spriteZCheck)
         {
-            if (m_renderPositions.TryGetValue(entityPos, out int count))
+            var spritePosKey = new SpritePosKey(entityPos, spriteIndex);
+            if (m_spriteRenderPositions.Add(spritePosKey))
             {
-                double nudge = NudgeFactor * count * Math.Sqrt(entity.RenderDistanceSquared);
-                double angle = Math.Atan2(centerBottom.Y - position.Y, centerBottom.X - position.X);
-                nudgeAmount.X = Math.Cos(angle) * nudge;
-                nudgeAmount.Y = Math.Sin(angle) * nudge;
-                m_renderPositions[entityPos] = count + 1;      
-            }
-            else
-            {
-                m_renderPositions[entityPos] = 1;
+                if (m_renderPositions.TryGetValue(entityPos, out int count))
+                {
+                    double nudge = NudgeFactor * count * Math.Sqrt(entity.RenderDistanceSquared);
+                    double angle = Math.Atan2(centerBottom.Y - position.Y, centerBottom.X - position.X);
+                    nudgeAmount.X = Math.Cos(angle) * nudge;
+                    nudgeAmount.Y = Math.Sin(angle) * nudge;
+                    m_renderPositions[entityPos] = count + 1;
+                }
+                else
+                {
+                    m_renderPositions[entityPos] = 1;
+                }
             }
         }
 
@@ -266,6 +273,12 @@ public class EntityRenderer : IDisposable
         m_program.ColorMapIndex(renderInfo.Uniforms.ColorMapUniforms.GlobalIndex);
         m_program.LightMode(renderInfo.Uniforms.LightMode);
         m_program.GammaCorrection(renderInfo.Uniforms.GammaCorrection);
+        m_program.ViewPos(renderInfo.Camera.Position);
+
+        // The fade distance calculations work using squared distances
+        float maxDistanceSquared = renderInfo.Uniforms.MaxDistance * renderInfo.Uniforms.MaxDistance;
+        m_program.MaxDistanceSquared(maxDistanceSquared);
+        m_program.FadeDistance(maxDistanceSquared / 2);
     }
 
     public void RenderAlpha(RenderInfo renderInfo)

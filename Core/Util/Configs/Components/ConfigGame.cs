@@ -1,12 +1,13 @@
 using Helion.Maps.Shared;
 using Helion.Resources.Definitions.MapInfo;
+using Helion.Util.Configs.Impl;
 using Helion.Util.Configs.Options;
 using Helion.Util.Configs.Values;
 using static Helion.Util.Configs.Values.ConfigFilters;
 
 namespace Helion.Util.Configs.Components;
 
-public class ConfigGame
+public class ConfigGame: ConfigElement<ConfigGame>
 {
     // Controls/input
 
@@ -62,6 +63,9 @@ public class ConfigGame
     [OptionMenu(OptionSectionType.General, "Confirm Quicksave to Slot")]
     public readonly ConfigValue<bool> QuickSaveConfirm = new(true);
 
+    [ConfigInfo("Automatically create a quicksave every x seconds. 0 = never.")]
+    [OptionMenu(OptionSectionType.General, "Quicksave Seconds")]
+    public readonly ConfigValue<int> QuickSaveSeconds = new(0, GreaterOrEqual(0));
 
     // Cheats
 

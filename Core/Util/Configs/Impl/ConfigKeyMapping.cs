@@ -12,7 +12,7 @@ public readonly record struct KeyCommandItem(Key Key, string Command);
 /// <summary>
 /// A case insensitive two-way lookup.
 /// </summary>
-public class ConfigKeyMapping : IConfigKeyMapping
+public partial class ConfigKeyMapping : IConfigKeyMapping
 {
     private static readonly Logger Log = LogManager.GetCurrentClassLogger();
 
@@ -69,19 +69,6 @@ public class ConfigKeyMapping : IConfigKeyMapping
         (Key.Minus,         Constants.Input.AutoMapDecrease),
         (Key.MouseWheelUp,  Constants.Input.AutoMapIncrease),
         (Key.MouseWheelDown, Constants.Input.AutoMapDecrease),
-        // Default controller bindings
-        (Key.Axis2Minus,    Constants.Input.Forward),
-        (Key.Axis2Plus,     Constants.Input.Backward),
-        (Key.Axis1Minus,    Constants.Input.Left),
-        (Key.Axis1Plus,     Constants.Input.Right),
-        (Key.Axis3Minus,    Constants.Input.TurnLeft),
-        (Key.Axis3Plus,     Constants.Input.TurnRight),
-        (Key.Button3,       Constants.Input.Use),
-        (Key.Button1,       Constants.Input.Attack),
-        (Key.Axis6Plus,     Constants.Input.Attack),
-        (Key.DPad1Up,       Constants.Input.NextWeapon),
-        (Key.DPad1Down,     Constants.Input.PreviousWeapon),
-        (Key.Button8,       Constants.Input.Menu),
     };
 
     public void SetInitialDefaultKeyBindings()
@@ -97,6 +84,21 @@ public class ConfigKeyMapping : IConfigKeyMapping
 
         Changed = true;
     }
+
+    public void LoadControllerPreset(ControllerPresetType presetType)
+    {
+        if (presetType == ControllerPresetType.Custom)
+            return;
+
+        m_commands.RemoveAll(keyCommand => keyCommand.Key >= Key.Axis1Plus && keyCommand.Key <= Key.Button30);
+
+        foreach (var keyMapping in ControllerPresetMappings[presetType])
+        {
+            m_commands.Add(new KeyCommandItem(keyMapping.key, keyMapping.command));
+        }
+    }
+
+    public bool IsControllerInput(Key key) => key >= Key.Axis1Plus && key <= Key.Button30;
 
     public void EnsureMenuKey()
     {

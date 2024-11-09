@@ -1,16 +1,21 @@
 ﻿namespace Helion.Util.Configs.Components;
 
+using Helion.Util.Configs.Impl;
 using Helion.Util.Configs.Options;
 using Helion.Util.Configs.Values;
 using static Helion.Util.Configs.Values.ConfigFilters;
 
-public class ConfigController
+public class ConfigController: ConfigElement<ConfigController>
 {
     // Controller
 
     [ConfigInfo("Enable game controller support.")]
     [OptionMenu(OptionSectionType.Controller, "Enable Game Controller", spacer: true)]
     public readonly ConfigValue<bool> EnableGameController = new(true);
+
+    [ConfigInfo("Load preset axis and button mappings for controller.")]
+    [OptionMenu(OptionSectionType.Controller, "Controller Preset")]
+    public readonly ConfigValue<ControllerPresetType> ControllerPreset = new(ControllerPresetType.None);
 
     [ConfigInfo("Dead zone for analog inputs.")]
     [OptionMenu(OptionSectionType.Controller, "Dead Zone", sliderMin: 0.1, sliderMax: 0.9, sliderStep: .05)]
