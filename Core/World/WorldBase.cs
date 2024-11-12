@@ -65,12 +65,16 @@ namespace Helion.World;
 
 public abstract partial class WorldBase : IWorld
 {
+    const int BspBlockDimension = 16;
     public const int DefaultLineOfSightDistance = 1024;
     private const double MaxPitch = 80.0 * Math.PI / 180.0;
     private const double MinPitch = -80.0 * Math.PI / 180.0;
 
     private static BlockMap? LastBlockMap;
     private static BlockMap? LastRenderBlockMap;
+    private static uint[]? LastBspBlockmapNodeIndices;
+    private static GridDimensions LastBspBlockmapDimensions;
+
     private static WorldSoundManager? LastWorldSoundManager;
     private static EntityManager? LastEntityManager;
     private static PhysicsManager? LastPhysicManager;
@@ -100,7 +104,7 @@ public abstract partial class WorldBase : IWorld
 
     public readonly long CreationTimeNanos;
     public string MapName { get; protected set; }
-    public readonly BlockMap Blockmap;
+    public BlockMap Blockmap { get; private set; }
     public WorldState WorldState { get; protected set; } = WorldState.Normal;
     public int Gametick { get; private set; }
     public int GameTicker { get; private set; }
@@ -119,7 +123,7 @@ public abstract partial class WorldBase : IWorld
     public DynamicArray<StructLine> StructLines => LastStructLines;
     public int?[] BspSegLines { get; } = [];
     public IList<HighlightArea> HighlightAreas { get; } = new List<HighlightArea>();
-    public CompactBspTree BspTree => Geometry.CompactBspTree;
+    public CompactBspTree BspTree { get; private set; }
     public EntityManager EntityManager { get; }
     public WorldSoundManager SoundManager { get; }
     public BlockmapTraverser BlockmapTraverser => PhysicsManager.BlockmapTraverser;
@@ -209,6 +213,7 @@ public abstract partial class WorldBase : IWorld
         Profiler = profiler;
         Geometry = geometry;
         Map = map;
+        BspTree = Geometry.CompactBspTree;
 
         if (Map.Reject != null && Map.Reject.Length > 0)
         {
@@ -334,15 +339,19 @@ public abstract partial class WorldBase : IWorld
         return LastWorldSoundManager;
     }
 
-    private BlockMap CreateBlockMap()
+    private unsafe BlockMap CreateBlockMap()
     {
         if (SameAsPreviousMap && LastBlockMap != null)
         {
+            m_bspBlockmapDimensions = LastBspBlockmapDimensions;
+            m_bspBlockmapNodeIndices = LastBspBlockmapNodeIndices!;            
             LastBlockMap.Clear();
             return LastBlockMap;
         }
 
         LastBlockMap = new BlockMap(Lines, 128);
+        CreateBspBlockMap(LastBlockMap);
+
         return LastBlockMap;
     }
 

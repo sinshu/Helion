@@ -33,6 +33,7 @@ using Helion.Maps;
 using Helion.Resources.Archives.Entries;
 using Helion.Util.Container;
 using Helion.Maps.Shared;
+using Helion.World.Geometry.Subsectors;
 
 namespace Helion.World;
 
@@ -80,6 +81,7 @@ public interface IWorld : IDisposable
     EntityManager EntityManager { get; }
     WorldSoundManager SoundManager { get; }
     BlockmapTraverser BlockmapTraverser { get; }
+    BlockMap Blockmap { get; }
     BlockMap RenderBlockmap { get; }
     SpecialManager SpecialManager { get; }
     TextureManager TextureManager { get; }
@@ -174,7 +176,8 @@ public interface IWorld : IDisposable
     void FindKeys();
     void FindKeyLines();
     void FindExits();
-    bool SetSkillLevel(SkillLevel skill);    
+    bool SetSkillLevel(SkillLevel skill);
+    Subsector ToSubsector(double x, double y);
 
     WorldModel ToWorldModel();
     GameFilesModel GetGameFilesModel();
