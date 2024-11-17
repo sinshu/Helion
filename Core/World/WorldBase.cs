@@ -174,6 +174,7 @@ public abstract partial class WorldBase : IWorld
     private readonly Func<DamageFuncParams, int> m_defaultDamageAction;
     private readonly EntityDefinition? m_teleportFogDef;
     private readonly Dictionary<int, MusInfoDef> m_sectorToMusicChange = new();
+    private readonly DynamicArray<Entity> m_fallCheckEntities = new(32);
     private MusInfoDef? m_lastMusicChange;
     private int m_changeMusicTicks = 0;
     private int m_losDistance = DefaultLineOfSightDistance;
@@ -600,6 +601,9 @@ public abstract partial class WorldBase : IWorld
         if (worldModel == null)
             SpecialManager.StartInitSpecials(LevelStats);
 
+        for (var entity = EntityManager.Head; entity != null; entity = entity.Next)
+            entity.SectorDamageSpecial = entity.Sector.SectorDamageSpecial;
+
         StaticDataApplier.DetermineStaticData(this);
         SpecialManager.SectorSpecialDestroyed += SpecialManager_SectorSpecialDestroyed;
     }
@@ -737,13 +741,13 @@ public abstract partial class WorldBase : IWorld
 
     public void Link(Entity entity)
     {
-        Precondition(entity.SectorNodes.Empty() && entity.BlockmapNodes.Empty(), "Forgot to unlink entity before linking");
+        Precondition(entity.SectorNodes.Empty() && entity.BlocksLength == 0, "Forgot to unlink entity before linking");
         PhysicsManager.LinkToWorld(entity, null, false);
     }
 
     public void LinkClamped(Entity entity)
     {
-        Precondition(entity.SectorNodes.Empty() && entity.BlockmapNodes.Empty(), "Forgot to unlink entity before linking");
+        Precondition(entity.SectorNodes.Empty() && entity.BlocksLength == 0, "Forgot to unlink entity before linking");
         PhysicsManager.LinkToWorld(entity, null, true);
     }
 
@@ -866,13 +870,24 @@ public abstract partial class WorldBase : IWorld
                 if (entity.Respawn)
                     HandleRespawn(entity);
 
-                if (entity.Sector.SectorDamageSpecial != null)
-                    entity.Sector.SectorDamageSpecial.Tick(entity);
+                entity.SectorDamageSpecial?.Tick(entity);
+                                
+                if (!WorldStatic.InfinitelyTallThings &&
+                    (entity.HadOnEntity || entity.OnEntity != WeakEntity.Default) &&
+                    !entity.Flags.NoGravity && !entity.Flags.NoBlockmap &&                    
+                    entity.Velocity.Z == 0 && entity.Position.Z > entity.HighestFloorSector.Floor.Z)
+                {
+                    m_fallCheckEntities.Add(entity);
+                }
             }
 
             entity = nextEntity;
         }
-
+        
+        // Check entities that are subject to falling and may have been on top of another entity that is no longer valid.
+        // This often happens with cacodemon clusters where a dead one is on top of many and needs to fall.
+        PhysicsManager.EntityFallCheck(m_fallCheckEntities);
+        m_fallCheckEntities.Clear();
         Profiler.World.TickEntity.Stop();
     }
 
@@ -2036,7 +2051,6 @@ public abstract partial class WorldBase : IWorld
 
     public virtual void HandleEntityDeath(Entity deathEntity, Entity? deathSource, bool gibbed)
     {
-        PhysicsManager.HandleEntityDeath(deathEntity);
         CheckDropItem(deathEntity);
 
         if (deathEntity.Flags.CountKill && !deathEntity.Flags.Friendly)

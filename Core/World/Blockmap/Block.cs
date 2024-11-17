@@ -7,6 +7,7 @@ using Helion.World.Geometry.Islands;
 using Helion.World.Geometry.Lines;
 using Helion.World.Geometry.Sectors;
 using Helion.World.Geometry.Sides;
+using System.Collections.Generic;
 using static Helion.Util.Assertion.Assert;
 
 namespace Helion.World.Blockmap;
@@ -45,12 +46,11 @@ public class Block
     public BlockLine[] BlockLines = new BlockLine[8];
     public int BlockLineCount;
 
-    /// <summary>
-    /// All the entities in this block.
-    /// </summary>
-    public readonly LinkableList<Entity> Entities = new();
+
     public readonly LinkableList<Island> DynamicSectors = new();
     public readonly DynamicArray<Side> DynamicSides = new();
+    public int[] EntityIndices = new int[8];
+    public int EntityIndicesLength;
 
     public Entity? HeadEntity;
 

@@ -1,4 +1,5 @@
 using System;
+using System.Security.Cryptography;
 using Helion.Geometry;
 using Helion.Geometry.Boxes;
 using Helion.Geometry.Grids;
@@ -6,6 +7,7 @@ using Helion.Geometry.Segments;
 using Helion.Geometry.Vectors;
 using Helion.Maps.Specials;
 using Helion.Maps.Specials.ZDoom;
+using Helion.Resources.Archives.Entries;
 using Helion.Util;
 using Helion.Util.Container;
 using Helion.Util.RandomGenerators;
@@ -49,6 +51,7 @@ public sealed class PhysicsManager
     public bool EnableMaxMoveXY = true;
 
     private IWorld m_world;
+    private DataCache m_dataCache;
     private CompactBspTree m_bspTree;
     private BlockMap m_blockmap;
     private UniformGrid<Block> m_blockmapGrid;
@@ -68,16 +71,15 @@ public sealed class PhysicsManager
 
     private MoveLinkData m_moveLinkData;
     private CanPassData m_canPassData;
-    private StackEntityTraverseData m_stackData;
     private Entity m_clampIgnoreEntity;
     private readonly Func<Entity, GridIterationStatus> m_canPassTraverseFunc;
     private readonly Func<Entity, GridIterationStatus> m_sectorMoveLinkClampAction;
-    private readonly Func<Entity, GridIterationStatus> m_stackEntityTraverseAction;
     private readonly Func<Entity, GridIterationStatus> m_ignoreClampEntityTraverseAction;
 
     public PhysicsManager(IWorld world, CompactBspTree bspTree, BlockMap blockmap, IRandom random, bool alwaysStickEntitiesToFloor)
     {
         m_world = world;
+        m_dataCache = world.DataCache;
         m_bspTree = bspTree;
         m_blockmap = blockmap;
         m_blockmapGrid = blockmap.Blocks;
@@ -87,7 +89,6 @@ public sealed class PhysicsManager
         BlockmapTraverser = new BlockmapTraverser(world, m_blockmap);
         m_checkedBlockLines = new int[m_world.Lines.Count];
         m_sectorMoveLinkClampAction = new(HandleSectorMoveLinkClamp);
-        m_stackEntityTraverseAction = new(HandleStackEntityTraverse);
         m_canPassTraverseFunc = new(CanPassTraverse);
         m_ignoreClampEntityTraverseAction = new(IgnoreClampEntityTraverse);
         m_alwaysStickEntitiesToFloor = alwaysStickEntitiesToFloor;
@@ -97,6 +98,7 @@ public sealed class PhysicsManager
     public void UpdateTo(IWorld world, CompactBspTree bspTree, BlockMap blockmap, IRandom random, bool alwaysStickEntitiesToFloor)
     {
         m_world = world;
+        m_dataCache = world.DataCache;
         m_bspTree = bspTree;
         m_blockmap = blockmap;
         m_blockmapGrid = blockmap.Blocks;
@@ -153,6 +155,24 @@ public sealed class PhysicsManager
         MoveXY(entity);
         MoveZ(entity);
         entity.Flags.IgnoreDropOff = false;
+    }
+
+    public void EntityFallCheck(DynamicArray<Entity> entities)
+    {
+        for (int i = 0; i < entities.Length; i++)
+        {
+            var entity = entities[i];
+            bool hasOnEntity = entity.OnEntity != WeakEntity.Default;
+            if (!hasOnEntity && entity.HadOnEntity)
+            {
+                ClampBetweenFloorAndCeiling(entity, entity.IntersectSectors, smoothZ: false, clampToLinkedSectors: true);
+                continue;
+            }
+
+            var onEntity = entity.OnEntity.Entity;
+            if (onEntity!.Position.Z + onEntity.Height < entity.Position.Z || !onEntity.Overlaps2D(entity))
+                ClampBetweenFloorAndCeiling(entity, entity.IntersectSectors, smoothZ: false, clampToLinkedSectors: true);
+        }
     }
 
     public SectorMoveStatus MoveSectorZ(double speed, double destZ, SectorMoveSpecial moveSpecial)
@@ -593,12 +613,6 @@ public sealed class PhysicsManager
         }
     }
 
-    public void HandleEntityDeath(Entity deathEntity)
-    {
-        if (deathEntity.OnEntity.Entity != null || deathEntity.OverEntity.Entity != null)
-            StackedEntityMoveZ(deathEntity);
-    }
-
     private static void ApplyFriction(Entity entity)
     {
         double sectorFriction = GetFrictionFromSectors(entity);
@@ -723,7 +737,9 @@ public sealed class PhysicsManager
         // short.MinValue checks are to emulate the fixed point overflow required for mikoportals.
         if (entity.Position.Z + entity.Height > lowestCeil || highestFloor <= short.MinValue)
         {
-            entity.Velocity.Z = 0;
+            if (entity.Velocity.Z > 0)
+                entity.Velocity.Z = 0;
+
             entity.Position.Z = lowestCeil - entity.GetClampHeight();
 
             if (highestFloor > short.MinValue)
@@ -833,7 +849,7 @@ public sealed class PhysicsManager
     private GridIterationStatus CanPassTraverse(Entity intersectEntity)
     {
         var entity = m_canPassData.Entity;
-        if (!intersectEntity.Flags.Solid || intersectEntity.Flags.Corpse || intersectEntity.Flags.NoClip || entity.Id == intersectEntity.Id)
+        if (!intersectEntity.Flags.Solid || intersectEntity.Flags.Corpse || intersectEntity.Flags.NoClip || entity == intersectEntity)
             return GridIterationStatus.Continue;
 
         for (int i = 0; i < m_clampIgnoreEntities.Length; i++)
@@ -863,13 +879,17 @@ public sealed class PhysicsManager
             // or clipped through then this is our floor.
             if ((clipped || entity.Position.Z >= intersectTopZ) && intersectTopZ >= m_canPassData.HighestFloorZ)
             {
-                addedOnEntity = true;
                 if (m_canPassData.HighestFloorEntity != null && m_canPassData.HighestFloorEntity.Position.Z + m_canPassData.HighestFloorEntity.Height < m_canPassData.HighestFloorZ)
                     m_onEntities.Clear();
 
                 m_canPassData.HighestFloorEntity = intersectEntity;
                 m_canPassData.HighestFloorZ = intersectTopZ;
-                m_onEntities.Add(m_canPassData.HighestFloorEntity);
+
+                if (intersectTopZ == entity.Position.Z)
+                {
+                    addedOnEntity = true;
+                    m_onEntities.Add(m_canPassData.HighestFloorEntity);
+                }
             }
         }
         else if (below)
@@ -890,7 +910,9 @@ public sealed class PhysicsManager
 
             m_canPassData.HighestFloorEntity = intersectEntity;
             m_canPassData.HighestFloorZ = intersectTopZ;
-            m_onEntities.Add(m_canPassData.HighestFloorEntity);
+
+            if (intersectTopZ == entity.Position.Z)
+                m_onEntities.Add(m_canPassData.HighestFloorEntity);
         }
 
         return GridIterationStatus.Continue;
@@ -1034,6 +1056,7 @@ public sealed class PhysicsManager
 doneLinkToSectors:
         entity.Subsector = centerSubsector;
         entity.Sector = centerSector;
+        entity.SectorDamageSpecial = centerSector.SectorDamageSpecial;
         entity.IntersectSectors.Add(centerSector);
         entity.SectorNodes.Add(centerSector.Link(entity));
     }
@@ -1090,7 +1113,6 @@ doneLinkToSectors:
 
         bool success = true;
         Vec3D saveVelocity = entity.Velocity;
-        bool stacked = !WorldStatic.InfinitelyTallThings && (entity.OnEntity.Entity != null || entity.OverEntity.Entity != null);
         Line? slideBlockLine = null;
         Entity? slideBlockEntity = null;
 
@@ -1136,15 +1158,6 @@ doneLinkToSectors:
             break;
         }
 
-        if (stacked && entity.Flags.CanPass && !entity.Flags.NoClip)
-        {
-            Box2D previousBox = new(entity.PrevPosition.X, entity.PrevPosition.Y, entity.Properties.Radius);
-            m_stackData.Entity = entity;
-            m_stackData.EntityBottomZ = entity.Position.Z;
-            m_stackData.EntityTopZ = entity.Position.Z + entity.Height;
-            m_world.BlockmapTraverser.EntityTraverse(previousBox, m_stackEntityTraverseAction);
-        }
-
         if (!success)
         {
             if (slideBlockEntity != null && entity.BlockingEntity == null)
@@ -1158,58 +1171,16 @@ doneLinkToSectors:
         return TryMoveData;
     }
 
-    private GridIterationStatus HandleStackEntityTraverse(Entity entity)
-    {
-        if (entity.OnEntity.Entity == m_stackData.Entity || entity.OverEntity.Entity == entity ||
-            entity.Position.Z == m_stackData.EntityTopZ || entity.Position.Z + entity.Height == m_stackData.EntityBottomZ)
-        {
-            ClampBetweenFloorAndCeiling(entity, entity.IntersectSectors,
-                smoothZ: false, clampToLinkedSectors: entity.MoveLinked);
-        }
-
-        return GridIterationStatus.Continue;
-    }
-
-    private void StackedEntityMoveZ(Entity entity)
-    {
-        Entity? currentOverEntity = entity.OverEntity.Entity;
-
-        if (entity.OverEntity.Entity != null && entity.OverEntity.Entity.Position.Z > entity.Position.Z + entity.Height)
-            entity.SetOverEntity(null);
-
-        if (entity.OnEntity.Entity != null)
-        {
-            Entity onEntity = entity.OnEntity.Entity;
-            ClampBetweenFloorAndCeiling(onEntity, onEntity.IntersectSectors,
-                smoothZ: false, clampToLinkedSectors: onEntity.MoveLinked);
-        }
-
-        while (currentOverEntity != null)
-        {
-            LinkableNode<Entity>? node = entity.Sector.Entities.Head;
-            while (node != null)
-            {
-                Entity relinkEntity = node.Value;
-                if (relinkEntity.OnEntity.Entity == entity)
-                    ClampBetweenFloorAndCeiling(relinkEntity, relinkEntity.IntersectSectors, false);
-                node = node.Next;
-            }
-
-            entity = currentOverEntity;
-            Entity? next = currentOverEntity.OverEntity.Entity;
-            if (currentOverEntity.OverEntity.Entity != null && currentOverEntity.OverEntity.Entity.OnEntity.Entity != entity)
-                currentOverEntity.SetOverEntity(null);
-            currentOverEntity = next;
-        }
-    }
-
     private const int PositionValidFlags1 = EntityFlags.SpecialFlag | EntityFlags.SolidFlag | EntityFlags.ShootableFlag;
     private const int PositionValidFlags2 = EntityFlags.TouchyFlag;
 
     public unsafe bool IsPositionValid(Entity entity, double x, double y, TryMoveData tryMove)
     {
-        if (!entity.Flags.Float && !entity.IsPlayer && entity.OnEntity.Entity != null && !entity.OnEntity.Entity.Flags.ActLikeBridge)
+        if (!WorldStatic.InfinitelyTallThings && (entity.Flags.Flags1 & EntityFlags.FloatFlag) == 0 && !entity.IsPlayer && entity.OnEntity.Entity != null
+            && (entity.OnEntity.Entity.Flags.Flags1 & EntityFlags.ActsLikeBridgeFlag) == 0)
+        {
             return false;
+        }
 
         tryMove.Success = true;
         tryMove.LowestCeiling = entity.Sector;
@@ -1255,11 +1226,12 @@ doneLinkToSectors:
             for (int bx = blockStartX; bx <= blockEndX; bx++)
             {
                 Block block = m_blockmapBlocks[by * m_blockmapGrid.Width + bx];
+                var entityIndices = block.EntityIndices;
                 if (checkEntities)
-                {               
-                    for (var entityNode = block.Entities.Head; entityNode != null; entityNode = entityNode.Next)
+                {
+                    for (int i = block.EntityIndicesLength - 1; i >= 0; i--)
                     {
-                        nextEntity = entityNode.Value;
+                        nextEntity = m_dataCache.Entities[entityIndices[i]];
                         if (nextEntity.BlockmapCount == checkCounter)
                             continue;
 
@@ -1739,10 +1711,9 @@ doneLinkToSectors:
         // Adds z velocity on the first tick, then adds -2 on the second instead of -1 on the first and -1 on the second.
         bool noVelocity = entity.Velocity.Z == 0;
         bool shouldApplyGravity = entity.ShouldApplyGravity();
-        if (noVelocity && !shouldApplyGravity && !entity.Flags.Float && entity.OnEntity.Entity == null)
+        if (noVelocity && !shouldApplyGravity && (entity.Flags.Flags1 & EntityFlags.FloatFlag) == 0 && entity.OnEntity == WeakEntity.Default)
             return;
 
-        bool stacked = entity.OnEntity.Entity != null || entity.OverEntity.Entity != null;
         if (entity.Flags.NoGravity && entity.ShouldApplyFriction())
             entity.Velocity.Z *= Constants.DefaultFriction;
         if (shouldApplyGravity)
@@ -1750,11 +1721,12 @@ doneLinkToSectors:
 
         double floatZ = entity.GetEnemyFloatMove();
         // Only return if OnEntity is null. Need to apply clamping to prevent issues with this entity floating when the entity beneath is no longer blocking.
-        if (noVelocity && floatZ == 0 && entity.OnEntity.Entity == null)
+        if (noVelocity && floatZ == 0 && entity.OnEntity == WeakEntity.Default)
             return;
 
         Vec3D previousVelocity = entity.Velocity;
-        double newZ = entity.Position.Z + entity.Velocity.Z + floatZ;
+        double oldZ = entity.Position.Z;
+        double newZ = oldZ + entity.Velocity.Z + floatZ;
         entity.Position.Z = newZ;
 
         // Passing MoveLinked emulates some vanilla functionality where things are not checked against linked sectors when they haven't moved
@@ -1762,8 +1734,5 @@ doneLinkToSectors:
 
         if (entity.IsBlocked())
             m_world.HandleEntityHit(entity, previousVelocity, null);
-
-        if (stacked)
-            StackedEntityMoveZ(entity);
     }
 }
