@@ -1,19 +1,16 @@
 ﻿using Helion.Geometry;
 using Helion.Geometry.Boxes;
 using Helion.Geometry.Vectors;
-using Helion.Render;
-using Helion.Render.Common.Shared;
+using Helion.Render.OpenGL.Renderers.Legacy.World;
 using Helion.Render.OpenGL.Renderers.Legacy.World.Geometry;
-using Helion.Render.OpenGL.Shared;
 using Helion.Render.OpenGL.Shared.World.ViewClipping;
 using Helion.Resources.Archives.Collection;
 using Helion.Util;
+using Helion.Util.Loggers;
 using Helion.World.Bsp;
-using Helion.World.Entities;
-using Helion.World.Entities.Definition;
 using Helion.World.Geometry.Lines;
-using Helion.World.Geometry.Sectors;
 using Helion.World.Geometry.Subsectors;
+using Helion.World.Physics;
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -35,13 +32,11 @@ public class AutomapMarker(ArchiveCollection archiveCollection)
     private readonly LineDrawnTracker m_lineDrawnTracker = new();
     private readonly Stopwatch m_stopwatch = new();
     private readonly ViewClipper m_viewClipper = new(archiveCollection.DataCache);
-    private readonly RenderInfo m_renderInfo = new();
-    private readonly OldCamera m_camera = new(default, default, 0, 0);
-    private readonly Entity m_dummyEntity = new();
     private Task? m_task;
     private CancellationTokenSource m_cancelTasks = new();
     private IWorld m_world = null!;
-    private FrustumPlanes m_frustumPlanes = new();
+    private bool m_occlude;
+    private Vec2D m_occludeViewPos;
 
     private readonly ConcurrentQueue<PlayerPosition> m_positions = new();
 
@@ -55,8 +50,6 @@ public class AutomapMarker(ArchiveCollection archiveCollection)
         world.OnDestroying += World_OnDestroying;
         m_world = world;
         m_lineDrawnTracker.UpdateToWorld(world);
-
-        m_dummyEntity.Set(0, 0, 0, EntityDefinition.Default, default, 0, m_world.Sectors[0], m_world);
 
         m_task = Task.Factory.StartNew(() => AutomapTask(m_cancelTasks.Token), m_cancelTasks.Token,
             TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -108,7 +101,6 @@ public class AutomapMarker(ArchiveCollection archiveCollection)
                 return;
 
             m_stopwatch.Restart();
-            var viewport = GetViewport();
 
             while (m_world != null && m_positions.TryDequeue(out PlayerPosition pos))
             {
@@ -119,15 +111,9 @@ public class AutomapMarker(ArchiveCollection archiveCollection)
                 m_viewClipper.Clear();
                 m_viewClipper.Center = pos.Position.XY;
 
-                var viewPosition = pos.Position.Float;
-                m_camera.Set(viewPosition, viewPosition, (float)pos.AngleRadians, (float)pos.PitchRadians);
-                m_renderInfo.Set(m_camera, 0, viewport, m_dummyEntity, false, default, 0, m_world.Config.Render, Sector.Default, default);
-                var mvp = Renderer.CalculateMvpMatrix(m_renderInfo);
-                Frustum.SetFrustumPlanes(ref mvp, ref m_frustumPlanes);
-
-                m_lineDrawnTracker.ClearDrawnLines();
-
-                MarkBspLineClips((uint)m_world.BspTree.Nodes.Length - 1, pos.Position.XY, m_world, token);
+                LegacyWorldRenderer.SetOccludePosition(pos.Position, pos.AngleRadians, pos.PitchRadians,
+                    ref m_occlude, ref m_occludeViewPos);
+                MarkBspLineClips((uint)m_world.BspTree.Nodes.Length - 1, pos.Position.XY, pos.ViewDirection.XY, m_world, token);
             }
 
             m_stopwatch.Stop();
@@ -138,31 +124,21 @@ public class AutomapMarker(ArchiveCollection archiveCollection)
         }
     }
 
-    private Rectangle GetViewport()
-    {
-        var window = m_world.Config.Window;
-        if (window.Virtual.Enable.Value)
-            return new(0, 0, window.Virtual.Dimension.Value.Width, window.Virtual.Dimension.Value.Height);
-        return new(0, 0, window.Dimension.Value.Width, window.Dimension.Value.Height);
-    }
-
-    private unsafe void MarkBspLineClips(uint nodeIndex, in Vec2D position, IWorld world, CancellationToken token)
+    private unsafe void MarkBspLineClips(uint nodeIndex, in Vec2D position, in Vec2D viewDirection, IWorld world, CancellationToken token)
     {
         while ((nodeIndex & BspNodeCompact.IsSubsectorBit) == 0)
         {
             fixed (BspNodeCompact* node = &world.BspTree.Nodes[nodeIndex])
             {
-                bool onRight = (node->SplitDelta.X * (position.Y - node->SplitStart.Y)) - (node->SplitDelta.Y * (position.X - node->SplitStart.X)) < 0;
-                int front = *(byte*)&onRight;
+                if (Occluded(node->BoundingBox, position, viewDirection))
+                    return;
 
-                MarkBspLineClips(node->Children[front], position, world, token);
+                double dot = (node->SplitDelta.X * (position.Y - node->SplitStart.Y)) - (node->SplitDelta.Y * (position.X - node->SplitStart.X));
+                int front = Convert.ToInt32(dot < 0);
+                int back = front ^ 1;
 
-                nodeIndex = node->Children[front ^ 1];
-                if ((nodeIndex & BspNodeCompact.IsSubsectorBit) == 0)
-                {
-                    if (Occluded(world.BspTree.Nodes[nodeIndex].BoundingBox, position))
-                        return;
-                }
+                MarkBspLineClips(node->Children[front], position, viewDirection, world, token);
+                nodeIndex = node->Children[back];
             }
 
             if (token.IsCancellationRequested)
@@ -170,6 +146,8 @@ public class AutomapMarker(ArchiveCollection archiveCollection)
         }
 
         Subsector subsector = world.BspTree.Subsectors[nodeIndex & BspNodeCompact.SubsectorMask];
+        if (Occluded(subsector.BoundingBox, position, viewDirection))
+            return;
 
         var subsectorLines = m_world.BspSegLines;
         var lineArray = world.StructLines.Data;
@@ -203,8 +181,7 @@ public class AutomapMarker(ArchiveCollection archiveCollection)
                 if (line.SeenForAutomap)
                     continue;
 
-                if (!m_frustumPlanes.PointInFrustum(line.Segment.Start.X, line.Segment.Start.Y) &&
-                    !m_frustumPlanes.PointInFrustum(line.Segment.End.X, line.Segment.End.Y))
+                if (m_occlude && !line.Segment.InView(position, viewDirection))
                     continue;
 
                 line.Flags |= StructLineFlags.SeenForAutomap;
@@ -215,25 +192,18 @@ public class AutomapMarker(ArchiveCollection archiveCollection)
 
     private unsafe void AddLineClip(SubsectorSegment* edge, ref StructLine line)
     {
-        if (line.BackCeilingPlane == null)
+        if (line.BackSector == null)
             m_viewClipper.AddLine(edge->Start, edge->End);
-        else if (IsRenderingBlocked(ref line))
+        else if (LineOpening.IsRenderingBlocked(ref line))
             m_viewClipper.AddLine(edge->Start, edge->End);
     }
 
-    private static bool IsRenderingBlocked(ref StructLine line)
+    private bool Occluded(in Box2D box, in Vec2D position, in Vec2D viewDirection)
     {
-        if (line.BackCeilingPlane == null || line.BackFloorPlane == null)
-            return true;
+        if (box.Contains(position))
+            return false;
 
-        var height = Math.Min(line.FrontCeilingPlane.Z, line.BackCeilingPlane.Z) -
-            Math.Max(line.FrontFloorPlane.Z, line.BackFloorPlane.Z);
-        return height <= 0;
-    }
-
-    private bool Occluded(in Box2D box, in Vec2D position)
-    {
-        if (!m_frustumPlanes.BoxInFront(box))
+        if (m_occlude && !box.InView(m_occludeViewPos, viewDirection))
             return true;
 
         box.GetSpanningEdge(position, out var first, out var second);

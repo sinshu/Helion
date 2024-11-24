@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Helion.Geometry.Vectors;
-using Helion.Render.Common.Shared;
 using Helion.Render.OpenGL.Renderers.Legacy.World.Data;
 using Helion.Render.OpenGL.Renderers.Legacy.World.Geometry.Static;
 using Helion.Render.OpenGL.Shared;
@@ -142,7 +141,7 @@ public class EntityRenderer : IDisposable
         return m_textureManager.GetSpriteRotation(spriteDefinition, frame, rotation, colorMapIndex);
     }
 
-    public unsafe void RenderEntity(Entity entity, in Vec2D position, ref FrustumPlanes planes)
+    public unsafe void RenderEntity(Entity entity, in Vec2D position)
     {
         const double NudgeFactor = 0.0001;
         
@@ -175,7 +174,8 @@ public class EntityRenderer : IDisposable
             uint entityAngle = ViewClipper.DiamondAngleFromRadians(entity.AngleRadians);
             rotation = CalculateRotation(viewAngle, entityAngle);
         }
-                
+
+        
         if (m_spriteZCheck)
         {
             var spritePosKey = new SpritePosKey(entityPos, spriteIndex);
@@ -199,10 +199,6 @@ public class EntityRenderer : IDisposable
         int colorMapIndex = entity.Properties.ColormapIndex ?? entity.GetTranslationColorMap();
         SpriteRotation spriteRotation = spriteDef == null ? m_nullSpriteRotation : GetSpriteRotation(spriteDef, entity.Frame.Frame, rotation, colorMapIndex);
         GLLegacyTexture texture = (spriteRotation.RenderStore as GLLegacyTexture) ?? m_textureManager.NullTexture;
-
-        if (!planes.SphereInFrustum(centerBottom, Math.Max(texture.Dimension.Width / 2, texture.Dimension.Height / 2)))
-            return;
-
         Sector sector = entity.Sector.GetRenderSector(m_transferHeightView);
 
         int halfTexWidth = texture.Dimension.Width / 2;
