@@ -54,12 +54,22 @@ public class GameLayerInput
 
         public void Rumble(ushort lowFrequency, ushort highFrequency, uint durationms)
         {
-            throw new NotImplementedException();
         }
 
-        public bool TryGetGyroAxis(GyroAxis axis, out float value)
+        public bool TryGetGyroAxis(GyroOrAccelAxis axis, out float value)
         {
-            throw new NotImplementedException();
+            value = 0;
+            return false;
+        }
+
+        public bool TryGetGyroAbsolute(GyroAxis axis, out double absoluteValue)
+        {
+            absoluteValue = 0;
+            return false;
+        }
+
+        public void ZeroGyroAbsolute()
+        {
         }
     }
 
