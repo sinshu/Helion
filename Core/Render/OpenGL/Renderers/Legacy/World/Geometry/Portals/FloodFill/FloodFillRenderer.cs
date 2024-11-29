@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using GlmSharp;
 using Helion.Geometry.Vectors;
 using Helion.Render.OpenGL.Buffer;
 using Helion.Render.OpenGL.Buffer.Array.Vertex;
@@ -18,24 +17,21 @@ using OpenTK.Graphics.OpenGL;
 
 namespace Helion.Render.OpenGL.Renderers.Legacy.World.Geometry.Portals.FloodFill;
 
-public class FloodFillRenderer : IDisposable
+public class FloodFillRenderer(LegacyGLTextureManager glTextureManager, FloodFillRenderMode renderMode) : IDisposable
 {
     const int FloodPlaneAddCount = 2;
     const int VerticesPerWall = 6;
 
-    private readonly LegacyGLTextureManager m_glTextureManager;
-    private TextureManager? m_textureManager;
+    private readonly LegacyGLTextureManager m_glTextureManager = glTextureManager;
+    private readonly FloodFillRenderMode m_renderMode = renderMode;
     private readonly FloodFillProgram m_program = new();
-    private readonly List<FloodFillInfo> m_floodFillInfos = new();
-    private readonly Dictionary<int, int> m_textureHandleToFloodFillInfoIndex = new();
+    private readonly List<FloodFillInfo> m_floodFillInfos = [];
+    private readonly Dictionary<int, int> m_textureHandleToFloodFillInfoIndex = [];
     private readonly DynamicArray<FloodGeometry> m_floodGeometry = new();
-    private readonly List<FloodGeometry> m_freeData = new();
+    private readonly LinkedList<FloodGeometry> m_freeData = [];
+    private readonly DynamicArray<LinkedListNode<FloodGeometry>> m_freeNodes = new();
+    private TextureManager? m_textureManager;
     private bool m_disposed;
-
-    public FloodFillRenderer(LegacyGLTextureManager glTextureManager)
-    {
-        m_glTextureManager = glTextureManager;
-    }
 
     ~FloodFillRenderer()
     {
@@ -66,23 +62,37 @@ public class FloodFillRenderer : IDisposable
         return floodInfo;
     }
 
-    private bool TryGetFloodGeometry(int floodKey, out FloodGeometry geometry)
+
+    private FloodGeometry NoGeometry = default;
+
+    private ref FloodGeometry TryGetFloodGeometry(int floodKey, out bool success)
     {
         floodKey--;
         if (floodKey < 0 || floodKey >= m_floodGeometry.Length)
-        {
-            geometry = default;
-            return false;
+        {            
+            success = false;
+            return ref NoGeometry;
         }
-        geometry = m_floodGeometry[floodKey];
-        return true;
+
+        success = true;
+        return ref m_floodGeometry.Data[floodKey];
     }
 
     public void UpdateStaticWall(int floodKey, SectorPlane floodPlane, WallVertices vertices, double minPlaneZ, double maxPlaneZ, 
         bool isFloodFillPlane = false)
     {
-        if (!TryGetFloodGeometry(floodKey, out var data))
+        if (m_renderMode == FloodFillRenderMode.Dynamic)
+        {
+            AddStaticWall(floodPlane, vertices, minPlaneZ, maxPlaneZ, isFloodFillPlane);
             return;
+        }
+
+        ref var data = ref TryGetFloodGeometry(floodKey, out var success);
+        if (!success)
+        {
+            AddStaticWall(floodPlane, vertices, minPlaneZ, maxPlaneZ, isFloodFillPlane);
+            return;
+        }
 
         if (!m_textureHandleToFloodFillInfoIndex.TryGetValue(data.TextureHandle, out int index))
             return;
@@ -148,13 +158,14 @@ public class FloodFillRenderer : IDisposable
             colorMapIndex = Renderer.GetColorMapBufferIndex(sectorPlane.Sector, LightBufferType.Ceiling);
         }
 
-        for (int i = 0; i < m_freeData.Count; i++)
+        for (var node = m_freeData.First; node != null; node = node.Next)
         {
-            if (m_freeData[i].TextureHandle != sectorPlane.TextureHandle || m_freeData[i].Vertices != vertexCount)
+            ref var data = ref node.ValueRef;
+            if (data.TextureHandle != sectorPlane.TextureHandle || data.Vertices != vertexCount)
                 continue;
 
-            var data = m_freeData[i];
-            m_freeData.RemoveAt(i);
+            m_freeData.Remove(node);
+            m_freeNodes.Add(node);
 
             m_floodGeometry[data.Key - 1] = new(data.Key, data.TextureHandle, lightIndex, colorMapIndex, data.VboOffset, data.Vertices);
             UpdateStaticWall(data.Key, sectorPlane, vertices, minPlaneZ, maxPlaneZ);
@@ -191,6 +202,9 @@ public class FloodFillRenderer : IDisposable
         if (isFloodFillPlane)
             ProjectFloodPlane(vbo, vbo.Data.Length, vertices, minZ, maxZ, planeZ, prevPlaneZ, lightIndex, 
                 maxPlaneZ > Constants.MaxTextureHeight ? -Constants.MaxTextureHeight : Constants.MaxTextureHeight, true, colorMapIndex);
+
+        if (m_renderMode == FloodFillRenderMode.Dynamic)
+            return 0;
 
         return newKey;
     }
@@ -234,16 +248,26 @@ public class FloodFillRenderer : IDisposable
 
     public void ClearStaticWall(int floodKey)
     {
-        if (TryGetFloodGeometry(floodKey, out var data))
+        if (m_renderMode == FloodFillRenderMode.Dynamic)
+            return;
+
+        ref var data = ref TryGetFloodGeometry(floodKey, out var success);
+        if (success)
         {
             int listIndex = m_textureHandleToFloodFillInfoIndex[data.TextureHandle];
             FloodFillInfo info = m_floodFillInfos[listIndex];
             OverwriteAndSubUploadVboWithZero(info.Vertices.Vbo, data.VboOffset, data.Vertices);
-            // Note: We do not delete it because we don't want to track
-            // having to compact, re-upload, shuffle things around, etc.
-            // This is not ideal since it is a bit wasteful for memory,
-            // but the negligible gains are not worth the complexity.
-            m_freeData.Add(data);
+
+            if (m_freeNodes.Length > 0)
+            {
+                var node = m_freeNodes.RemoveLast();
+                node.Value = data;
+                m_freeData.AddLast(node);
+            }
+            else
+            {
+                m_freeData.AddLast(new LinkedListNode<FloodGeometry>(data));
+            }
         }
         else
         {
@@ -300,6 +324,19 @@ public class FloodFillRenderer : IDisposable
             info.Vertices.Vao.Bind();
             info.Vertices.Vbo.DrawArrays();
         }
+    }
+
+    public void ClearVertices()
+    {
+        Debug.Assert(m_renderMode == FloodFillRenderMode.Dynamic, "Clear should only be called on dynamic flood fill renderer");
+
+        for (int i = 0; i < m_floodFillInfos.Count; i++)
+        {
+            var info = m_floodFillInfos[i];
+            info.Vertices.Vbo.Clear();
+        }
+
+        m_floodGeometry.Clear();
     }
 
     private void ClearData()

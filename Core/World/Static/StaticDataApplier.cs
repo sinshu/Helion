@@ -2,7 +2,6 @@
 using Helion.World.Special.Specials;
 using Helion.World.Geometry.Lines;
 using Helion.World.Geometry.Sides;
-using Helion.Resources;
 using Helion.Util;
 using Helion.Render.OpenGL.Renderers.Legacy.World.Geometry;
 
@@ -17,19 +16,6 @@ public class StaticDataApplier
         IsLoading = true;
         for (int i = 0; i < world.Lines.Count; i++)
             DetermineStaticSectorLine(world, world.Lines[i]);
-
-        if (world.Config.Developer.FloodOpposing)
-        {
-            for (int i = 0; i < world.Lines.Count; i++)
-            {
-                var line = world.Lines[i];
-                if (line.Back == null)
-                    continue;
-
-                SetOpposingFlood(line.Front);
-                SetOpposingFlood(line.Back);
-            }
-        }
 
         foreach (var special in world.SpecialManager.GetSpecials())
         {
@@ -49,20 +35,9 @@ public class StaticDataApplier
         }
 
         for (int i = 0; i < world.Sectors.Count; i++)
-            DetermineStaticSector(world, world.Sectors[i], world.TextureManager);
+            world.RenderBlockmap.Link(world, world.Sectors[i]);
 
         IsLoading = false;
-    }
-
-    private static void DetermineStaticSector(WorldBase world, Sector sector, TextureManager textureManager)
-    {
-        if (sector.TransferHeights == null)
-            return;
-
-        bool save = IsLoading;
-        IsLoading = false;
-        SetSectorDynamic(world, sector, SectorPlanes.Floor | SectorPlanes.Ceiling, SectorDynamic.TransferHeights);
-        IsLoading = save;
     }
 
     private static void DetermineStaticSectorLine(WorldBase world, Line line)
@@ -92,14 +67,6 @@ public class StaticDataApplier
         }
     }
 
-    private static void SetOpposingFlood(Side side)
-    {
-        if ((side.FloodTextures & SideTexture.Lower) != 0 && !side.PartnerSide!.Sector.Flood)
-            side.PartnerSide.Sector.FloodOpposingFloor = true;
-        if ((side.FloodTextures & SideTexture.Upper) != 0 && !side.PartnerSide!.Sector.Flood)
-            side.PartnerSide.Sector.FloodOpposingCeiling = true;
-    }
-
     public static void CheckFloodFill(IWorld world, Line line)
     {
         if (line.Back == null)
@@ -111,17 +78,27 @@ public class StaticDataApplier
         SetFloodFillSide(world, line.Back, line.Front, backSector, frontSector);
     }
 
+    public static bool ShouldFloodLower(Side facingSide, Side otherSide, Sector facingSector, Sector otherSector)
+    {
+        return facingSide.Lower.TextureHandle <= Constants.NullCompatibilityTextureIndex &&
+            (facingSector.Floor.Z < otherSector.Floor.Z || facingSector.Floor.PrevZ < otherSector.Floor.PrevZ);
+    }
+
+    public static bool ShouldFloodUpper(IWorld world, Side facingSide, Side otherSide, Sector facingSector, Sector otherSector)
+    {
+        return facingSide.Upper.TextureHandle <= Constants.NullCompatibilityTextureIndex &&
+            (facingSector.Ceiling.Z > otherSector.Ceiling.Z || facingSector.Ceiling.PrevZ > otherSector.Ceiling.PrevZ) &&
+            GeometryRenderer.UpperIsVisibleOrFlood(world.ArchiveCollection.TextureManager, facingSide, otherSide, facingSector, otherSector, out _);
+    }
+
     public static void SetFloodFillSide(IWorld world, Side facingSide, Side otherSide, Sector facingSector, Sector otherSector)
     {
-        if (facingSide.Lower.TextureHandle <= Constants.NullCompatibilityTextureIndex && 
-            (facingSector.Floor.Z < otherSector.Floor.Z || facingSector.Floor.PrevZ < otherSector.Floor.PrevZ))
+        if (ShouldFloodLower(facingSide, otherSide, facingSector, otherSector))
             facingSide.FloodTextures |= SideTexture.Lower;
         else
             facingSide.FloodTextures &= ~SideTexture.Lower;
 
-        if (facingSide.Upper.TextureHandle <= Constants.NullCompatibilityTextureIndex && 
-            (facingSector.Ceiling.Z > otherSector.Ceiling.Z || facingSector.Ceiling.PrevZ > otherSector.Ceiling.PrevZ) &&
-            GeometryRenderer.UpperIsVisibleOrFlood(world.ArchiveCollection.TextureManager, facingSide, otherSide, facingSector, otherSector, out _))
+        if (ShouldFloodUpper(world, facingSide, otherSide, facingSector, otherSector))
             facingSide.FloodTextures |= SideTexture.Upper;
         else
             facingSide.FloodTextures &= ~SideTexture.Upper;
@@ -137,8 +114,8 @@ public class StaticDataApplier
         if ((face & SectorPlanes.Ceiling) != 0)
             sector.Ceiling.Dynamic |= sectorDynamic;
 
-        if (sector.BlockmapNodes.Length == 0 && (sectorDynamic == SectorDynamic.TransferHeights || sectorDynamic == SectorDynamic.Movement || sectorDynamic == SectorDynamic.Scroll))
-            world.RenderBlockmap.Link(world, sector);
+        if (sector.BlockmapNodes.Length == 0 && (sectorDynamic == SectorDynamic.Movement || sectorDynamic == SectorDynamic.Scroll))
+            world.RenderBlockmap.LinkDynamic(world, sector);
 
         if (sectorDynamic == SectorDynamic.Movement)
             SetSectorDynamicMovement(world, sector);
@@ -174,9 +151,6 @@ public class StaticDataApplier
 
         plane.Sector.UnlinkFromWorld(world);
 
-        bool floor = plane.Facing == SectorPlaneFace.Floor;
-        bool ceiling = plane.Facing == SectorPlaneFace.Ceiling;
-
         for (int i = 0; i < plane.Sector.Lines.Count; i++)
             ClearDynamicMovement(plane.Sector.Lines[i]);
     }
@@ -201,6 +175,5 @@ public class StaticDataApplier
             line.Back.Dynamic &= ~SectorDynamic.Movement;
 
         line.Front.Dynamic &= ~SectorDynamic.Movement;
-
     }
 }
