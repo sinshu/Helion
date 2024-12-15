@@ -8,6 +8,7 @@ using Helion.Render.OpenGL.Shared;
 using Helion.Resources.Definitions.MapInfo;
 using Helion.Resources.Definitions.SoundInfo;
 using Helion.Util;
+using Helion.Util.Config.Components;
 using Helion.World.Blockmap;
 using Helion.World.Cheats;
 using Helion.World.Entities.Definition;
@@ -846,6 +847,10 @@ public class Player : Entity
             if (weapon != null)
                 ChangeWeapon(weapon);
         }
+        else if (GetWeaponGroupCommand(TickCommand) != TickCommands.None)
+        {
+            ExecuteWeaponGroup(TickCommand);
+        }
 
         if (TickCommand.Has(TickCommands.CenterView))
             PitchRadians = 0;
@@ -909,6 +914,98 @@ public class Player : Entity
             var weapon = Inventory.Weapons.GetWeapon(slot.Slot, slot.SubSlot);
             if (weapon != null)
                 ChangeWeapon(weapon);
+        }
+    }
+
+    private static int GetWeaponGroupIndex(TickCommands tickCommand) =>
+        (int)tickCommand - (int)TickCommands.WeaponGroup1;
+    
+    private static readonly TickCommands[] WeaponGroupCommands = new TickCommands[]
+    {
+        TickCommands.WeaponGroup1,
+        TickCommands.WeaponGroup2,
+        TickCommands.WeaponGroup3,
+        TickCommands.WeaponGroup4
+    };
+
+    private static TickCommands GetWeaponGroupCommand(TickCommand tickCommand)
+    {
+        for (int i = 0; i < WeaponGroupCommands.Length; i++) {
+            if (tickCommand.Has(WeaponGroupCommands[i]))
+                return WeaponGroupCommands[i];
+        }
+        return TickCommands.None;
+    }
+
+    private ConfigWeaponSlots[,] m_WeaponGroups = new ConfigWeaponSlots[4,3];
+    private ConfigWeaponSlots[,] GetWeaponGroups()
+    {
+        m_WeaponGroups[0,0] = WorldStatic.World.Config.Player.Group1Weapon1;
+        m_WeaponGroups[0,1] = WorldStatic.World.Config.Player.Group1Weapon2;
+        m_WeaponGroups[0,2] = WorldStatic.World.Config.Player.Group1Weapon3;
+        m_WeaponGroups[1,0] = WorldStatic.World.Config.Player.Group2Weapon1;
+        m_WeaponGroups[1,1] = WorldStatic.World.Config.Player.Group2Weapon2;
+        m_WeaponGroups[1,2] = WorldStatic.World.Config.Player.Group2Weapon3;
+        m_WeaponGroups[2,0] = WorldStatic.World.Config.Player.Group3Weapon1;
+        m_WeaponGroups[2,1] = WorldStatic.World.Config.Player.Group3Weapon2;
+        m_WeaponGroups[2,2] = WorldStatic.World.Config.Player.Group3Weapon3;
+        m_WeaponGroups[3,0] = WorldStatic.World.Config.Player.Group4Weapon1;
+        m_WeaponGroups[3,1] = WorldStatic.World.Config.Player.Group4Weapon2;
+        m_WeaponGroups[3,2] = WorldStatic.World.Config.Player.Group4Weapon3;
+        return m_WeaponGroups;
+    }
+    private int m_CurrentGroup = -1;
+    private int m_CurrentGroupIndex = -1;
+
+    private void ExecuteWeaponGroup(TickCommand tickCommand)
+    {
+        var groupNumber = GetWeaponGroupIndex(GetWeaponGroupCommand(tickCommand));
+        var weaponGroups = GetWeaponGroups();
+        int currentIndex = -1;
+        if (groupNumber == m_CurrentGroup) 
+        {
+            currentIndex = m_CurrentGroupIndex;
+        }
+        int resultingIndex = 0;
+        Weapon? selectedWeapon = null;
+        for (int slotIndex = 0; slotIndex < weaponGroups.GetLength(1); slotIndex++) 
+        {
+            var slot = weaponGroups[groupNumber,slotIndex];
+            if (slot != ConfigWeaponSlots.None) 
+            {
+                Weapon? weapon = null;
+                if (WeaponSlot == (int)slot)
+                {
+                    var nextSlot = Inventory.Weapons.GetNextSubSlot(this);
+                    if (nextSlot.Slot != -1 && nextSlot.SubSlot != WeaponSubSlot)
+                        weapon = Inventory.Weapons.GetWeapon(nextSlot.Slot, nextSlot.SubSlot);
+                }
+                else
+                {
+                    weapon = Inventory.Weapons.GetWeapon((int)slot, Inventory.Weapons.GetBestSubSlot((int)slot));
+                }
+
+                if (weapon != null) 
+                {
+                    if (slotIndex > currentIndex) 
+                    {
+                        selectedWeapon = weapon;
+                        resultingIndex = slotIndex;
+                        break;
+                    } 
+                    else if (selectedWeapon == null && slotIndex != currentIndex) // Only grab the first result before the current index
+                    {
+                        selectedWeapon = weapon;
+                        resultingIndex = slotIndex;
+                    }
+                }
+            }
+        }
+        if (selectedWeapon != null)
+        {
+            ChangeWeapon(selectedWeapon);
+            m_CurrentGroup = groupNumber;
+            m_CurrentGroupIndex = resultingIndex;
         }
     }
 
