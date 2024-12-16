@@ -60,9 +60,6 @@ public class LegacyGLTextureManager : GLTextureManager<GLLegacyTexture>
     {
         foreach (var key in tracker.GetKeys())
         {
-            if (key == ResourceNamespace.Sprites)
-                continue;
-
             foreach (var texture in tracker.GetValues(key))
             {
                 texture.Bind();
@@ -105,6 +102,9 @@ public class LegacyGLTextureManager : GLTextureManager<GLLegacyTexture>
     public unsafe void UploadAndSetParameters(GLLegacyTexture texture, Image image, string name, ResourceNamespace resourceNamespace, TextureFlags flags)
     {
         GL.BindTexture(texture.Target, texture.TextureId);
+
+        if (resourceNamespace == ResourceNamespace.Sprites || resourceNamespace == ResourceNamespace.Undefined)
+            flags = TextureFlags.ClampX | TextureFlags.ClampY;
 
         GLHelper.ObjectLabel(ObjectLabelIdentifier.Texture, texture.TextureId, $"Texture: {name} ({flags})");
 
@@ -172,32 +172,13 @@ public class LegacyGLTextureManager : GLTextureManager<GLLegacyTexture>
 
     private void SetTextureParameters(TextureTarget targetType, ResourceNamespace resourceNamespace, TextureFlags flags)
     {
-        if (resourceNamespace != ResourceNamespace.Sprites && resourceNamespace != ResourceNamespace.Graphics)
-        {
-            TextureWrapMode textureWrapS = flags.HasFlag(TextureFlags.ClampX) ? TextureWrapMode.ClampToEdge : TextureWrapMode.Repeat;
-            TextureWrapMode textureWrapT = flags.HasFlag(TextureFlags.ClampY) ? TextureWrapMode.ClampToEdge : TextureWrapMode.Repeat;
-            GL.TexParameter(targetType, TextureParameterName.TextureWrapS, (int)textureWrapS);
-            GL.TexParameter(targetType, TextureParameterName.TextureWrapT, (int)textureWrapT);
+        TextureWrapMode textureWrapS = flags.HasFlag(TextureFlags.ClampX) ? TextureWrapMode.ClampToEdge : TextureWrapMode.Repeat;
+        TextureWrapMode textureWrapT = flags.HasFlag(TextureFlags.ClampY) ? TextureWrapMode.ClampToEdge : TextureWrapMode.Repeat;
+        GL.TexParameter(targetType, TextureParameterName.TextureWrapS, (int)textureWrapS);
+        GL.TexParameter(targetType, TextureParameterName.TextureWrapT, (int)textureWrapT);
 
-            SetTextureFilter(targetType);
-            SetAnisotropicFiltering(targetType);
-            return;
-        }
-
-        // Sprites are a special case where we want to clamp to the edge.
-        // This stops artifacts from forming.
-        GL.TexParameter(targetType, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-        GL.TexParameter(targetType, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-
-        if (resourceNamespace == ResourceNamespace.Sprites)
-        {
-            GL.TexParameter(targetType, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-            GL.TexParameter(targetType, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
-        }
-        else
-        {
-            SetTextureFilter(targetType);
-        }
+        SetTextureFilter(targetType);
+        SetAnisotropicFiltering(targetType);
     }
 
     public void SetTextureFilter(TextureTarget targetType)

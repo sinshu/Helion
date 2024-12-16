@@ -14,8 +14,39 @@ public enum FragColorFunctionOptions
 
 public enum ColorMapFetchContext { Default, Hud, Entity }
 
+public enum OitOptions
+{
+    None,
+    OitTransparentPass,
+    OitCompositePass
+}
+
 public class FragFunction
 {
+    public static string OitFragVariables(OitOptions options)
+    {
+        switch (options)
+        {
+            case OitOptions.OitTransparentPass:
+                return @"
+                  layout (location = 0) out vec4 accum;
+                  layout (location = 1) out vec2 accumCount;";
+            case OitOptions.OitCompositePass:
+                return @"
+                    uniform sampler2D accum;
+                    uniform sampler2D accumCount;
+
+                    // get the max value between three values
+                    float max3(vec3 v) 
+                    {
+	                    return max(max(v.x, v.y), v.z);
+                    }
+                    ";
+            default:
+                return "";
+        }
+    }
+
     public static string FuzzFunction =>
         @"        
         // These two functions are found here:
@@ -111,16 +142,24 @@ public class FragFunction
                 .Replace("${IndexAdd}", indexAdd);
     }
 
-    public static string FragColorFunction(FragColorFunctionOptions options, ColorMapFetchContext ctx = ColorMapFetchContext.Default)
+    public static string FragColorFunction(FragColorFunctionOptions options, ColorMapFetchContext ctx = ColorMapFetchContext.Default, 
+        OitOptions oitOptions = OitOptions.None, string postProcess = "")
     {
-        return @"
-            fragColor = texture(boundTexture, uvFrag.st);" +
+        var fragColor = "fragColor = texture(boundTexture, uvFrag.st);";
+        if (oitOptions == OitOptions.OitTransparentPass)
+            fragColor = "vec4 fragColor = texture(boundTexture, uvFrag.st);";
+
+        return
+            fragColor +
             (options.HasFlag(FragColorFunctionOptions.Colormap) ? ColorMapFetch(true, ctx) : "")
             + AlphaFlag(true) +
             (options.HasFlag(FragColorFunctionOptions.Fuzz) ? FuzzFragFunction : "") +
             (ShaderVars.PaletteColorMode ? "\n" : "fragColor.xyz *= lightLevel;\n") +
             (options.HasFlag(FragColorFunctionOptions.AddAlpha) ?
-                "fragColor.w = fragColor.w * alphaFrag + addAlphaFrag;\n" :
+                @"fragColor.w = fragColor.w * alphaFrag + addAlphaFrag;"
+                +
+                GetClearAlpha(oitOptions)
+                :
                 "") +
             (options.HasFlag(FragColorFunctionOptions.Alpha) ?
                 "fragColor.w *= alphaFrag;" :
@@ -133,7 +172,51 @@ public class FragFunction
 "
             + (ShaderVars.PaletteColorMode ? "" : "fragColor.xyz *= min(sectorColorMapIndexFrag, 1);")
             + InvulnerabilityFragColor
-            + GammaCorrection();
+            + GammaCorrection()
+            + postProcess
+            + Oit(oitOptions);
+    }
+
+    private static string GetClearAlpha(OitOptions oitOptions)
+    {
+        if (oitOptions != OitOptions.None)
+            return "";
+
+        return @"// Don't write partially transparent pixels for two-sided middle to fix issues with texture filtering.
+                fragColor.w = mix(fragColor.a > 0.5 ? 1.0 : 0.0, fragColor.w, addAlphaFrag);";
+    }
+
+    private static string Oit(OitOptions options)
+    {
+        if (options == OitOptions.None)
+            return @"";
+
+        if (options == OitOptions.OitTransparentPass)
+            return @"
+                float weight = clamp(10 / (1e-5 + pow(dist/1000, 2)) + pow(dist/8192, 6), 100.0, 1000.0);
+                accum = vec4(fragColor.rgb * fragColor.a, fragColor.a) * weight;
+                accumCount = vec2(fragColor.a, 1);
+            ";
+
+        return @"
+            ivec2 coords = ivec2(gl_FragCoord.xy);
+
+            // r is accumulated alpha, g is accumulation count
+            vec2 counter = texelFetch(accumCount, coords, 0).rg;
+            float alphaComponent = counter.r;
+            float countComponent = counter.g;
+
+            if (countComponent == 0)
+                discard;
+
+	        vec4 accumulation = texelFetch(accum, coords, 0);
+	        if (isinf(max3(abs(accumulation.rgb)))) 
+		        accumulation.rgb = vec3(accumulation.a);
+
+	        // prevent floating point precision bug
+	        vec3 average_color = accumulation.rgb / max(accumulation.a, 0.00001f);
+            
+	        fragColor = vec4(average_color, alphaComponent / countComponent);";
     }
 
     public static string GammaCorrection() => "fragColor.rgb = pow(fragColor.rgb, vec3(1.0/gammaCorrection));";

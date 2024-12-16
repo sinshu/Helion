@@ -102,8 +102,8 @@ public partial class Renderer : IDisposable
         SetGLStates();
     }
 
-    private GLFramebuffer GenerateMainFramebuffer() => new("Main", Window.Dimension, 1, RenderbufferStorage.Depth32fStencil8);
-    private GLFramebuffer GenerateVirtualFramebuffer() => new("Virtual", RenderDimension, 1, RenderbufferStorage.Depth32fStencil8);
+    private GLFramebuffer GenerateMainFramebuffer() => new("Main", Window.Dimension, 1);
+    private GLFramebuffer GenerateVirtualFramebuffer() => new("Virtual", RenderDimension, 1, GLFrameBufferOptions.DepthStencilAttachment);
 
     public unsafe void UploadColorMap()
     {
@@ -657,7 +657,7 @@ public partial class Renderer : IDisposable
         }
 
         UpdateBuffers();
-        m_worldRenderer.Render(cmd.World, m_renderInfo);
+        m_worldRenderer.Render(cmd.World, m_renderInfo, m_virtualFramebuffer);
 
         if (ShaderVars.ReversedZ)
         {
