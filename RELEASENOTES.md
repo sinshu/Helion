@@ -13,6 +13,8 @@
   - Add option to disable crosshair shrinking on target
   - Add use command to allow for separate bindings for shotgun/super shotgun [bind x "use shotgun"] [bind y "use supershotgun"]
   - Add custom weapon groups similar to the ones found in Woof!, with the added bonus of being assignable to any button.
+  - Added order independent transparency to fix issues with multiple transparent sprites causing transparent textures not to render
+  - Support texture filtering with sprites
 
 ## Bug fixes:
   - Fix per ammo values for box ammo and backpack amount from dehacked patch
@@ -36,3 +38,4 @@
   - Added sprites and sounds for mbf helper dog
   - Fix label clear in UMAPINFO
   - Fallback to status bar background texture (borderflat) defined in gameinfo
+  - Fix issue with two-sided middle walls and texture filtering causing edge pixels to render incorrectly
