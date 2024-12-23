@@ -160,7 +160,7 @@ public partial class Renderer : IDisposable
 
     public static float GetFuzzDiv(ConfigRender config, in Rectangle viewport)
     {
-        return viewport.Height / 480f * (float)config.FuzzAmount;
+        return viewport.Height / 480f / 2 * (float)config.FuzzAmount;
     }
 
     public static ShaderUniforms GetShaderUniforms(IConfig config, IWorld world, RenderInfo renderInfo)
@@ -485,7 +485,8 @@ public partial class Renderer : IDisposable
         Log.Info("OpenGL Hardware: {0}", GLInfo.Renderer);
         Log.Info("OpenGL Extensions: {0}", GLExtensions.Count);
         Log.Info("GL_ARB_clip_control {0}", GLInfo.ClipControlSupported);
-        Log.Info("MapPersistentBit {0}", GLInfo.MapPersistentBitSupported);
+        Log.Info("GL_ARB_shader_image_load_store {0}", GLInfo.MemoryBarrierSupported);
+        Log.Info("GL_ARB_buffer_storage {0}", GLInfo.MapPersistentBitSupported);
 
         InfoPrinted = true;
     }
@@ -678,7 +679,10 @@ public partial class Renderer : IDisposable
 
     private void DrawHudImagesIfAnyQueued(Rectangle viewport, ShaderUniforms uniforms)
     {
-        m_hudRenderer.Render(viewport, uniforms);
+        // Bind main buffer for fuzz refraction sampling when player has partial invisibility
+        GL.ActiveTexture(TextureUnit.Texture7);
+        GL.BindTexture(TextureTarget.Texture2D, m_mainFramebuffer.Textures[0].Name);
+        m_hudRenderer.Render(viewport, m_mainFramebuffer.Dimension, uniforms);
         m_hudRenderer.Clear();
     }
 
