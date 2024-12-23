@@ -228,7 +228,10 @@ public class FragFunction
             .Replace("${FuzzRefractFragColor}",
                 options == FuzzRefractionOptions.World ?
                 @"  
-                if (renderFuzzRefractionColor > 0 && fuzzAlpha >= 0.4) {
+                if (renderFuzzRefractionColor > 0) {
+                    if (fuzzAlpha < 0.4)
+                        discard;
+                    
                     vec4 fuzzColor = vec4(mix(color, ${FuzzBlackColor}, fuzzAlpha), 1);
                     vec2 counter = texelFetch(accumCount, refractCoords, 0).rg;
                     float alphaComponent = counter.r;
