@@ -1,8 +1,10 @@
-﻿using Helion.Util;
+﻿using Helion.Graphics;
+using Helion.Util;
 
 namespace Helion.Tests.Unit.GameLayer;
 
 public class MockScreenshotGenerator : IScreenshotGenerator
 {
-    public byte[]? GeneratePngImage() => null;
+    public Image? GetImage() => new((1, 1), ImageType.Argb);
+    public byte[]? GeneratePngImage(Image image) => null;
 }

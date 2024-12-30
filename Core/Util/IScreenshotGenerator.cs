@@ -3,5 +3,6 @@ namespace Helion.Util;
 
 public interface IScreenshotGenerator
 {
-    public byte[]? GeneratePngImage();
+    Image? GetImage();
+    byte[]? GeneratePngImage(Image image);
 }

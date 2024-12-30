@@ -1,3 +1,4 @@
+using Helion.Graphics;
 using Helion.Models;
 using Helion.Resources.Definitions.MapInfo;
 using Helion.Util;
@@ -77,7 +78,7 @@ public class SaveGame
     }
 
     public static SaveGameEvent WriteSaveGame(IWorld world, WorldModel worldModel, 
-        string title, string saveDir, string filename, byte[]? image, string? useFileName)
+        string title, string saveDir, string filename, IScreenshotGenerator screenshotGenerator, Image? image)
     {
         SaveGameModel saveGameModel = new()
         {
@@ -89,7 +90,7 @@ public class SaveGame
             Files = world.GetGameFilesModel()
         };
 
-        string saveTempFile = useFileName ?? TempFileManager.GetFile();
+        string saveTempFile = TempFileManager.GetFile();
 
         try
         {
@@ -105,9 +106,10 @@ public class SaveGame
 
             if (image != null)
             {
+                var imageBytes = screenshotGenerator.GeneratePngImage(image);
                 entry = zipArchive.CreateEntry(ImageFile);
                 using var stream = entry.Open();
-                stream.Write(image);
+                stream.Write(imageBytes);
             }
         }
         catch (Exception ex)

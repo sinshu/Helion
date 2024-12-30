@@ -672,12 +672,11 @@ public class GameLayerManager : IGameLayerManager
         if (WorldLayer == null || (!isRotating && LastSave == null) || !CanSave)
             return;
 
-        var image = m_screenshotGenerator.GeneratePngImage();
         var world = WorldLayer!.World;
         if (isRotating)
         {
             string name = $"Quick: {world.MapInfo.GetMapNameWithPrefix(world.ArchiveCollection.Language)}";
-            var saveEvent = await m_saveGameManager.WriteSaveGameAsync(world, name, image, null, quickSave: true);
+            var saveEvent = await m_saveGameManager.WriteSaveGameAsync(world, name, m_screenshotGenerator, null, quickSave: true);
             HandleSaveEvent(saveEvent, world);
         }
         else
@@ -688,7 +687,7 @@ public class GameLayerManager : IGameLayerManager
             string name = isCustomizedName
                 ? existingSave.Model?.Text ?? "Unnamed"
                 : world.MapInfo.GetMapNameWithPrefix(world.ArchiveCollection.Language);
-            var saveEvent = await m_saveGameManager.WriteSaveGameAsync(world, name, image, existingSave);
+            var saveEvent = await m_saveGameManager.WriteSaveGameAsync(world, name, m_screenshotGenerator, existingSave);
             HandleSaveEvent(saveEvent, world, SaveMenu.SaveMessage);
         }
     }

@@ -350,7 +350,7 @@ public class SaveMenu : Menu
 
             if (GetWorld(out IWorld? world) && world != null)
             {
-                SaveGameEvent saveGameEvent = m_saveGameManager.WriteSaveGame(world, getName(), m_screenshotGenerator.GeneratePngImage(), save);
+                var saveGameEvent = m_saveGameManager.WriteSaveGame(world, getName(), m_screenshotGenerator, save);
                 m_parent.Close();
 
                 HandleSaveEvent(world, saveGameEvent);
@@ -370,7 +370,7 @@ public class SaveMenu : Menu
         {
             if (GetWorld(out IWorld? world) && world != null)
             {
-                SaveGameEvent saveGameEvent = m_saveGameManager.WriteNewSaveGame(world, getName(), m_screenshotGenerator.GeneratePngImage());
+                SaveGameEvent saveGameEvent = m_saveGameManager.WriteNewSaveGame(world, getName(), m_screenshotGenerator);
                 m_parent.Manager.Remove(m_parent);
 
                 HandleSaveEvent(world, saveGameEvent);

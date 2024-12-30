@@ -270,6 +270,7 @@ public partial class Client : IDisposable, IInputManagement
 
         m_filesLoaded = false;
         m_window.Renderer.UploadColorMap();
+        m_saveGameManager.LoadCurrentSaveFiles();
     }
 
     private void CheckMapLoad()
@@ -365,7 +366,7 @@ public partial class Client : IDisposable, IInputManagement
         var mapInfoDef = worldLayer.CurrentMap;
 
         string title = $"Auto: {mapInfoDef.GetMapNameWithPrefix(worldLayer.World.ArchiveCollection.Language)}";
-        var saveGameEvent = await m_saveGameManager.WriteNewSaveGameAsync(worldLayer.World, title, m_screenshotGenerator.GeneratePngImage(), autoSave: true);
+        var saveGameEvent = await m_saveGameManager.WriteNewSaveGameAsync(worldLayer.World, title, m_screenshotGenerator, autoSave: true);
         if (saveGameEvent.Success)
             m_console.AddMessage($"Saved {saveGameEvent.FileName}");
 
