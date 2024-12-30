@@ -10,4 +10,5 @@ public class SaveGameModel
     public string MapName { get; set; } = string.Empty;
     public DateTime Date { get; set; }
     public string WorldFile { get; set; } = string.Empty;
+    public string ImageFile { get; set; } = string.Empty;
 }

@@ -11,7 +11,7 @@ public partial class WorldBase
 {
     public WorldModel ToWorldModel()
     {
-        List<SectorModel> sectorModels = new(256);
+        List<SectorModel> sectorModels = new(Sectors.Count);
         List<SectorDamageSpecialModel> sectorDamageSpecialModels = new(256);
         SetSectorModels(sectorModels, sectorDamageSpecialModels);
 
@@ -91,7 +91,7 @@ public partial class WorldBase
 
     private IList<FileModel> GetFileModels()
     {
-        List<FileModel> fileModels = new();
+        List<FileModel> fileModels = [];
         var archives = ArchiveCollection.Archives;
         foreach (var archive in archives)
         {
@@ -105,7 +105,7 @@ public partial class WorldBase
 
     private List<EntityModel> GetEntityModels()
     {
-        List<EntityModel> entityModels = new(2048);
+        List<EntityModel> entityModels = new(EntityManager.EntityCount);
         for (var entity = EntityManager.Head; entity != null; entity = entity.Next)
         {
             if (!entity.IsPlayer)
@@ -128,7 +128,7 @@ public partial class WorldBase
 
     private List<LineModel> GetLineModels()
     {
-        List<LineModel> lineModels = new(256);
+        List<LineModel> lineModels = new(Lines.Count / 4);
         for (int i = 0; i < Lines.Count; i++)
         {
             Line line = Lines[i];

@@ -42,6 +42,7 @@ public class EntityManager : IDisposable
     public const int NoTid = 0;
     private static readonly Logger Log = LogManager.GetCurrentClassLogger();
 
+    public int EntityCount;
     public Entity? Head;
     public LinkedList<Entity> TeleportSpots = new();
     public SpawnLocations SpawnLocations;
@@ -93,6 +94,7 @@ public class EntityManager : IDisposable
 
     public Entity Create(EntityDefinition definition, Vec3D position, double zHeight, double angle, int tid, bool initSpawn = false)
     {
+        EntityCount++;
         var sector = World.ToSubsector(position.X, position.Y).Sector;
 
         position.Z = GetPositionZ(sector, in position, zHeight);
@@ -117,13 +119,8 @@ public class EntityManager : IDisposable
         if (entity.IsDisposed)
             return;
 
-        // TODO: Remove from spawns if it is a spawn.
+        EntityCount--;
 
-        // To avoid more object allocation and deallocation, I'm going to
-        // leave empty sets in the map in case they get populated again.
-        // Most maps wouldn't even approach a number that high for us to
-        // worry about. If it ever becomes an issue, then we can add a line
-        // of code that removes empty sets here as well.
         if (TidToEntity.TryGetValue(entity.ThingId, out ISet<Entity>? entities))
             entities.Remove(entity);
 

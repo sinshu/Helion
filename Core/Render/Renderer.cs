@@ -57,6 +57,7 @@ public partial class Renderer : IDisposable
     /// Framebuffer used to draw the world.
     /// </summary>
     private GLFramebuffer m_virtualFramebuffer;
+    private GLFramebuffer m_screenshotFramebuffer;
     public readonly LegacyGLTextureManager Textures;
     internal readonly IConfig m_config;
     internal readonly FpsTracker m_fpsTracker;
@@ -96,6 +97,8 @@ public partial class Renderer : IDisposable
         Default = new(window, this);
         m_mainFramebuffer = GenerateMainFramebuffer();
         m_virtualFramebuffer = GenerateVirtualFramebuffer();
+        // Temporary frame buffer for smaller save game screenshots. Significantly than pulling the full sized pixel buffer and downsizing using image sharp.
+        m_screenshotFramebuffer = new("Screenshot", (320, 240), 1);
 
         PrintGLInfo();
         SetGLStates();
@@ -489,34 +492,32 @@ public partial class Renderer : IDisposable
         });
     }
 
-    public Image GetMainFramebufferData()
-    {
-        var (w, h, rgba) = GetMainFramebufferDataRaw();
-        int pixelCount = w * h;
-        uint[] argb = new uint[pixelCount];
-        int offset = 0;
-        for (int i = 0; i < pixelCount; i++)
-        {
-            uint r = rgba[offset];
-            uint g = rgba[offset + 1];
-            uint b = rgba[offset + 2];
-            // ignore the original alpha channel
-            argb[i] = 0xFF000000 | (r << 16) | (g << 8) | b;
-            offset += 4;
-        }
+    public Image GetMainFramebufferData() => GenerateFrameBufferImage(m_mainFramebuffer);
 
-        var image = new Image(argb, (w, h), ImageType.Argb, (0, 0), Resources.ResourceNamespace.Global).FlipY();
+    public Image GetVirtualFrameBufferData() => GenerateFrameBufferImage(m_virtualFramebuffer);
+
+    public Image GetScreenshotFrameBufferData()
+    {
+        BlitToScreenshotBuffer();
+        return GenerateFrameBufferImage(m_screenshotFramebuffer);
+    }
+
+    private Image GenerateFrameBufferImage(GLFramebuffer framebuffer)
+    {
+        var (w, h, rgba) = GetFramebufferDataRaw(framebuffer);
+        var image = new Image(rgba, (w, h), ImageType.Rgba, (0, 0), Resources.ResourceNamespace.Global);
+        image.FlipY();
         return image;
     }
 
-    private unsafe (int width, int height, byte[] rgba) GetMainFramebufferDataRaw()
+    private unsafe (int width, int height, uint[] rgba) GetFramebufferDataRaw(GLFramebuffer framebuffer)
     {
         GL.Finish();
-        (int w, int h) = m_mainFramebuffer.Dimension;
-        byte[] rgba = new byte[w * h * 4];
+        (int w, int h) = framebuffer.Dimension;
+        var rgba = new uint[w * h];
 
-        m_mainFramebuffer.BindRead();
-        fixed (byte* rgbPtr = rgba)
+        framebuffer.BindRead();
+        fixed (uint* rgbPtr = rgba)
         {
             IntPtr ptr = new(rgbPtr);
             GL.ReadPixels(0, 0, w, h, PixelFormat.Rgba, PixelType.UnsignedByte, ptr);
@@ -525,7 +526,7 @@ public partial class Renderer : IDisposable
         return (w, h, rgba);
     }
 
-    private void HandleClearCommand(ClearRenderCommand clearRenderCommand)
+    private static void HandleClearCommand(ClearRenderCommand clearRenderCommand)
     {
         Color color = clearRenderCommand.ClearColor;
         GL.ClearColor(color.R / 255.0f, color.G / 255.0f, color.B / 255.0f, color.A / 255.0f);
@@ -629,6 +630,24 @@ public partial class Renderer : IDisposable
         GL.BindTexture(TextureTarget.Texture2D, m_mainFramebuffer.Textures[0].Name);
         m_hudRenderer.Render(viewport, m_mainFramebuffer.Dimension, uniforms);
         m_hudRenderer.Clear();
+    }
+
+    private void BlitToScreenshotBuffer()
+    {
+        var screenshotDimension = m_screenshotFramebuffer.Dimension;
+        var virtualDimension = m_virtualFramebuffer.Dimension;
+        float scaleX = Math.Min(screenshotDimension.AspectRatio / virtualDimension.AspectRatio, 1.0f);
+        int sourceWidth = (int)(virtualDimension.Width * scaleX);
+        int offsetX = (virtualDimension.Width - sourceWidth) / 2;
+
+        m_screenshotFramebuffer.BindDraw();
+        m_virtualFramebuffer.BindRead();
+        GL.ClearColor(0, 0, 0, 1);
+        GL.Clear(ClearBufferMask.ColorBufferBit);
+        GL.BlitFramebuffer(
+            offsetX, 0, offsetX + sourceWidth, virtualDimension.Height,
+            0, 0, screenshotDimension.Width, screenshotDimension.Height,
+            ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
     }
 
     private void BlitVirtualFramebufferToMain()

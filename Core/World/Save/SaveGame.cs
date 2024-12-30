@@ -1,3 +1,4 @@
+using Helion.Graphics;
 using Helion.Models;
 using Helion.Resources.Definitions.MapInfo;
 using Helion.Util;
@@ -15,6 +16,7 @@ public class SaveGame
 {
     private static readonly string SaveDataFile = "save.json";
     private static readonly string WorldDataFile = "world.json";
+    private static readonly string ImageFile = "image.png";
 
     public readonly SaveGameModel? Model;
 
@@ -75,19 +77,20 @@ public class SaveGame
         }
     }
 
-    public static SaveGameEvent WriteSaveGame(IWorld world, string title, string saveDir, string filename)
+    public static SaveGameEvent WriteSaveGame(IWorld world, WorldModel worldModel, 
+        string title, string saveDir, string filename, IScreenshotGenerator screenshotGenerator, Image? image)
     {
         SaveGameModel saveGameModel = new()
         {
             Text = title,
             MapName = world.MapInfo.GetMapNameWithPrefix(world.ArchiveCollection.Language),
             Date = DateTime.Now,
-            WorldFile = "world.json",
+            WorldFile = WorldDataFile,
+            ImageFile = image == null ? "" : ImageFile,
             Files = world.GetGameFilesModel()
         };
 
         string saveTempFile = TempFileManager.GetFile();
-        WorldModel worldModel = world.ToWorldModel();
 
         try
         {
@@ -100,6 +103,14 @@ public class SaveGame
             entry = zipArchive.CreateEntry(WorldDataFile);
             using (Stream stream = entry.Open())
                 stream.Write(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(worldModel, typeof(WorldModel), WorldModelSerializationContext.Default)));
+
+            if (image != null)
+            {
+                var imageBytes = screenshotGenerator.GeneratePngImage(image);
+                entry = zipArchive.CreateEntry(ImageFile);
+                using var stream = entry.Open();
+                stream.Write(imageBytes);
+            }
         }
         catch (Exception ex)
         {
