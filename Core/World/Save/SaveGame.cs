@@ -77,7 +77,7 @@ public class SaveGame
     }
 
     public static SaveGameEvent WriteSaveGame(IWorld world, WorldModel worldModel, 
-        string title, string saveDir, string filename, byte[]? image)
+        string title, string saveDir, string filename, byte[]? image, string? useFileName)
     {
         SaveGameModel saveGameModel = new()
         {
@@ -89,7 +89,7 @@ public class SaveGame
             Files = world.GetGameFilesModel()
         };
 
-        string saveTempFile = TempFileManager.GetFile();
+        string saveTempFile = useFileName ?? TempFileManager.GetFile();
 
         try
         {

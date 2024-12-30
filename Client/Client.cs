@@ -337,7 +337,7 @@ public partial class Client : IDisposable, IInputManagement
         // Note: StaticDataApplier happens through this start and needs to happen before UpdateToNewWorld
         worldLayer.World.Start(m_loadMapResult.WorldModel);
 
-        WriteAutoSave(m_loadMapResult);
+        _ = WriteAutoSave(m_loadMapResult);
 
         m_window.Renderer.UpdateToNewWorld(worldLayer.World);
         m_layerManager.LockInput = false;
@@ -356,7 +356,7 @@ public partial class Client : IDisposable, IInputManagement
         m_onLoadMapComplete = null;
     }
 
-    private void WriteAutoSave(LoadMapResult result)
+    private async Task WriteAutoSave(LoadMapResult result)
     {
         if (result.WorldLayer == null || result.Players.Count == 0 || !m_config.Game.AutoSave)
             return;
@@ -365,7 +365,7 @@ public partial class Client : IDisposable, IInputManagement
         var mapInfoDef = worldLayer.CurrentMap;
 
         string title = $"Auto: {mapInfoDef.GetMapNameWithPrefix(worldLayer.World.ArchiveCollection.Language)}";
-        var saveGameEvent = m_saveGameManager.WriteNewSaveGame(worldLayer.World, title, m_screenshotGenerator.GeneratePngImage(), autoSave: true);
+        var saveGameEvent = await m_saveGameManager.WriteNewSaveGameAsync(worldLayer.World, title, m_screenshotGenerator.GeneratePngImage(), autoSave: true);
         if (saveGameEvent.Success)
             m_console.AddMessage($"Saved {saveGameEvent.FileName}");
 

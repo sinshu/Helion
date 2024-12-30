@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Helion.Models;
 using Helion.Resources.Archives.Collection;
+using Helion.Util;
 using Helion.Util.Configs;
 using Helion.Util.Extensions;
 using Helion.World.Util;
@@ -81,10 +83,36 @@ public class SaveGameManager
 
     public SaveGame ReadSaveGame(string filename) => new(GetSaveDir(), filename);
 
+    public Task<SaveGameEvent> WriteNewSaveGameAsync(IWorld world, string title, byte[]? image, bool autoSave = false, bool quickSave = false) =>
+        WriteSaveGameAsync(world, title, image, null, autoSave, quickSave);
+
+    public async Task<SaveGameEvent> WriteSaveGameAsync(IWorld world, string title, byte[]? image, SaveGame? existingSave, bool autoSave = false, bool quickSave = false)
+    {
+        existingSave = GetExistingSave(existingSave, autoSave, quickSave);
+        var filename = existingSave?.FileName ?? GetNewSaveName(autoSave, quickSave);
+        var worldModel = world.ToWorldModel();
+        var useFileName = TempFileManager.GetFile();
+        var saveEvent = await Task.Run(() => SaveGame.WriteSaveGame(world, worldModel, title, GetSaveDir(), filename, image, useFileName));
+
+        GameSaved?.Invoke(this, saveEvent);
+        return saveEvent;
+    }
+
     public SaveGameEvent WriteNewSaveGame(IWorld world, string title, byte[]? image, bool autoSave = false, bool quickSave = false) =>
         WriteSaveGame(world, title, image, null, autoSave, quickSave);
 
     public SaveGameEvent WriteSaveGame(IWorld world, string title, byte[]? image, SaveGame? existingSave, bool autoSave = false, bool quickSave = false)
+    {
+        existingSave = GetExistingSave(existingSave, autoSave, quickSave);
+        var filename = existingSave?.FileName ?? GetNewSaveName(autoSave, quickSave);
+        var worldModel = world.ToWorldModel();
+        var saveEvent = SaveGame.WriteSaveGame(world, worldModel, title, GetSaveDir(), filename, image, null);
+
+        GameSaved?.Invoke(this, saveEvent);
+        return saveEvent;
+    }
+
+    private SaveGame? GetExistingSave(SaveGame? existingSave, bool autoSave, bool quickSave)
     {
         if (existingSave == null && autoSave && m_config.Game.RotatingAutoSaves > 0)
         {
@@ -100,11 +128,8 @@ public class SaveGameManager
             if (matchingSaves.Any() && matchingSaves.Count() >= m_config.Game.RotatingQuickSaves)
                 existingSave = matchingSaves.First();
         }
-        string filename = existingSave?.FileName ?? GetNewSaveName(autoSave, quickSave);
-        var saveEvent = SaveGame.WriteSaveGame(world, world.ToWorldModel(), title, GetSaveDir(), filename, image);
 
-        GameSaved?.Invoke(this, saveEvent);
-        return saveEvent;
+        return existingSave;
     }
 
     public List<SaveGame> GetSortedSaveGames()
@@ -123,10 +148,9 @@ public class SaveGameManager
 
     public List<SaveGame> GetSaveGames()
     {
-        return Directory.GetFiles(GetSaveDir(), "*.hsg")
+        return [.. Directory.GetFiles(GetSaveDir(), "*.hsg")
             .Select(f => new SaveGame(GetSaveDir(), Path.GetFileName(f)))
-            .OrderByDescending(f => f.Model?.Date)
-            .ToList();
+            .OrderByDescending(f => f.Model?.Date)];
     }
 
     public bool DeleteSaveGame(SaveGame saveGame)

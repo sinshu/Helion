@@ -36,6 +36,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using static Helion.Util.Assertion.Assert;
 
 namespace Helion.Layer;
@@ -250,7 +251,7 @@ public class GameLayerManager : IGameLayerManager
         if (m_quickSaveTicks >= seconds * (int)Constants.TicksPerSecond)
         {
             m_quickSaveTicks = 0;
-            WriteQuickSave();
+            _ = WriteQuickSave();
         }
     }
 
@@ -491,7 +492,7 @@ public class GameLayerManager : IGameLayerManager
         }
 
         if (ConsumeCommandPressed(Constants.Input.QuickSave, input))
-            QuickSave();
+            _ = QuickSave();
 
         if (ConsumeCommandPressed(Constants.Input.Load, input))
             GoToSaveOrLoadMenu(false);
@@ -624,7 +625,7 @@ public class GameLayerManager : IGameLayerManager
         Add(new EndoomLayer(closeAction, m_archiveCollection, m_window.Dimension.Height));
     }
 
-    public void QuickSave()
+    public async Task QuickSave()
     {
         if (!CanSave)
             return;
@@ -632,7 +633,7 @@ public class GameLayerManager : IGameLayerManager
         // if we're using rotating quicksaves, then we aren't concerned with saving to a particular slot
         if (m_config.Game.RotatingQuickSaves > 0)
         {
-            WriteQuickSave();
+            await WriteQuickSave();
             return;
         }
 
@@ -645,7 +646,7 @@ public class GameLayerManager : IGameLayerManager
         if (m_config.Game.QuickSaveConfirm)
         {
             MessageMenu confirm = new(m_config, m_console, m_soundManager, m_archiveCollection,
-                new[] { "Are you sure you want to overwrite:", LastSave?.SaveGame.Model != null ? LastSave.Value.SaveGame.Model.Text : "Save", "Press Y to confirm." },
+                ["Are you sure you want to overwrite:", LastSave?.SaveGame.Model != null ? LastSave.Value.SaveGame.Model.Text : "Save", "Press Y to confirm."],
                 isYesNoConfirm: true, clearMenus: true);
             confirm.Cleared += Confirm_Cleared;
 
@@ -654,7 +655,7 @@ public class GameLayerManager : IGameLayerManager
             return;
         }
 
-        WriteQuickSave();
+        await WriteQuickSave();
     }
 
     private void Confirm_Cleared(object? sender, bool e)
@@ -662,10 +663,10 @@ public class GameLayerManager : IGameLayerManager
         if (!e || !LastSave.HasValue)
             return;
 
-        WriteQuickSave();
+        _ = WriteQuickSave();
     }
 
-    private void WriteQuickSave()
+    private async Task WriteQuickSave()
     {
         bool isRotating = m_config.Game.RotatingQuickSaves > 0;
         if (WorldLayer == null || (!isRotating && LastSave == null) || !CanSave)
@@ -676,7 +677,7 @@ public class GameLayerManager : IGameLayerManager
         if (isRotating)
         {
             string name = $"Quick: {world.MapInfo.GetMapNameWithPrefix(world.ArchiveCollection.Language)}";
-            var saveEvent = m_saveGameManager.WriteSaveGame(world, name, image, null, quickSave: true);
+            var saveEvent = await m_saveGameManager.WriteSaveGameAsync(world, name, image, null, quickSave: true);
             HandleSaveEvent(saveEvent, world);
         }
         else
@@ -687,15 +688,17 @@ public class GameLayerManager : IGameLayerManager
             string name = isCustomizedName
                 ? existingSave.Model?.Text ?? "Unnamed"
                 : world.MapInfo.GetMapNameWithPrefix(world.ArchiveCollection.Language);
-            var saveEvent = m_saveGameManager.WriteSaveGame(world, name, image, existingSave);
+            var saveEvent = await m_saveGameManager.WriteSaveGameAsync(world, name, image, existingSave);
             HandleSaveEvent(saveEvent, world, SaveMenu.SaveMessage);
         }
     }
 
-    private void HandleSaveEvent(SaveGameEvent saveEvent, SinglePlayerWorld world, string? successMessage = null)
+    private static void HandleSaveEvent(SaveGameEvent saveEvent, SinglePlayerWorld world, string? successMessage = null)
     {
         if (saveEvent.Success)
+        {
             world.DisplayMessage(world.Player, null, successMessage ?? $"Saved {saveEvent.FileName}");
+        }
         else
         {
             world.DisplayMessage(world.Player, null, $"Failed to save {saveEvent.FileName}");
