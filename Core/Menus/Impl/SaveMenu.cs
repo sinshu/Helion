@@ -15,7 +15,6 @@ using Helion.World.Save;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -39,6 +38,7 @@ public class SaveMenu : Menu
     private readonly MenuLayer m_parent;
     private readonly SaveGameManager m_saveGameManager;
     private readonly List<SaveGame> m_saveGames;
+    private readonly IScreenshotGenerator m_screenshotGenerator;
     private int m_currentPage = 1;
     private readonly bool m_isSave;
     private readonly bool m_canSave;
@@ -52,13 +52,14 @@ public class SaveMenu : Menu
     private SaveGame? m_deleteSave;
 
     public SaveMenu(MenuLayer parent, IConfig config, HelionConsole console, SoundManager soundManager,
-        ArchiveCollection archiveCollection, SaveGameManager saveManager, bool hasWorld, bool isSave, bool clearOnClose)
+        ArchiveCollection archiveCollection, SaveGameManager saveManager, IScreenshotGenerator screenshotGenerator, bool hasWorld, bool isSave, bool clearOnClose)
         : base(config, console, soundManager, archiveCollection, 8, true, clearOnClose: clearOnClose)
     {
         m_parent = parent;
         m_saveGameManager = saveManager;
         m_canSave = hasWorld;
         m_isSave = isSave;
+        m_screenshotGenerator = screenshotGenerator;
 
         m_saveGames = saveManager.GetMatchingSaveGames(saveManager.GetSaveGames()).ToList();
         UpdateMenuComponents(setTop: true);
@@ -349,7 +350,7 @@ public class SaveMenu : Menu
 
             if (GetWorld(out IWorld? world) && world != null)
             {
-                SaveGameEvent saveGameEvent = m_saveGameManager.WriteSaveGame(world, getName(), save);
+                SaveGameEvent saveGameEvent = m_saveGameManager.WriteSaveGame(world, getName(), m_screenshotGenerator.GeneratePngImage(), save);
                 m_parent.Close();
 
                 HandleSaveEvent(world, saveGameEvent);
@@ -369,7 +370,7 @@ public class SaveMenu : Menu
         {
             if (GetWorld(out IWorld? world) && world != null)
             {
-                SaveGameEvent saveGameEvent = m_saveGameManager.WriteNewSaveGame(world, getName());
+                SaveGameEvent saveGameEvent = m_saveGameManager.WriteNewSaveGame(world, getName(), m_screenshotGenerator.GeneratePngImage());
                 m_parent.Manager.Remove(m_parent);
 
                 HandleSaveEvent(world, saveGameEvent);

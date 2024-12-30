@@ -336,25 +336,19 @@ public class Image
         }
     }
 
-    public Image FlipY()
+    public void FlipY()
     {
-        uint[] flippedPixels = new uint[Dimension.Area];
-
-        for (int srcRow = 0; srcRow < Dimension.Height; srcRow++)
+        var row = new uint[Dimension.Width];
+        var rowSize = Dimension.Width;
+        for (int y = 0; y < Dimension.Height / 2; y++)
         {
-            int destRow = Dimension.Height - 1 - srcRow;
-            int srcOffset = srcRow * Width;
-            int destOffset = destRow * Width;
+            var topRowIndex = y * rowSize;
+            var bottomRowIndex = (Dimension.Height - y - 1) * rowSize;
 
-            for (int col = 0; col < Dimension.Width; col++)
-            {
-                flippedPixels[destOffset] = m_pixels[srcOffset];
-                srcOffset++;
-                destOffset++;
-            }
+            Array.Copy(m_pixels, topRowIndex, row, 0, rowSize);
+            Array.Copy(m_pixels, bottomRowIndex, m_pixels, topRowIndex, rowSize);
+            Array.Copy(row, 0, m_pixels, bottomRowIndex, rowSize);
         }
-
-        return new(flippedPixels, Dimension, ImageType, Offset, Namespace);
     }
 
     public void ConvertToGrayscale(bool normalize)

@@ -80,6 +80,7 @@ public class GameLayerManager : IGameLayerManager
     private readonly HudRenderContext m_hudContext = new(default);
     private readonly OptionsLayer m_optionsLayer;
     private readonly ConsoleLayer m_consoleLayer;
+    private readonly IScreenshotGenerator m_screenshotGenerator;
     private Renderer m_renderer;
     private IRenderableSurfaceContext m_ctx;
     private IHudRenderContext m_hudRenderCtx;
@@ -93,10 +94,11 @@ public class GameLayerManager : IGameLayerManager
 
     public GameLayerManager(IConfig config, IWindow window, HelionConsole console, ConsoleCommands consoleCommands,
         ArchiveCollection archiveCollection, SoundManager soundManager, SaveGameManager saveGameManager,
-        Profiler profiler)
+        Profiler profiler, IScreenshotGenerator screenshotGenerator)
     {
         m_config = config;
         m_window = window;
+        m_screenshotGenerator = screenshotGenerator;
         m_console = console;
         m_consoleCommands = consoleCommands;
         m_archiveCollection = archiveCollection;
@@ -587,7 +589,7 @@ public class GameLayerManager : IGameLayerManager
 
         if (MenuLayer == null)
         {
-            MenuLayer menuLayer = new(this, m_config, m_console, m_archiveCollection, m_soundManager, m_saveGameManager, m_optionsLayer);
+            MenuLayer menuLayer = new(this, m_config, m_console, m_archiveCollection, m_soundManager, m_saveGameManager, m_optionsLayer, m_screenshotGenerator);
             menuLayer.Animation.AnimateIn();
             Add(menuLayer);
         }
@@ -669,11 +671,12 @@ public class GameLayerManager : IGameLayerManager
         if (WorldLayer == null || (!isRotating && LastSave == null) || !CanSave)
             return;
 
+        var image = m_screenshotGenerator.GeneratePngImage();
         var world = WorldLayer!.World;
         if (isRotating)
         {
             string name = $"Quick: {world.MapInfo.GetMapNameWithPrefix(world.ArchiveCollection.Language)}";
-            var saveEvent = m_saveGameManager.WriteSaveGame(world, name, null, quickSave: true);
+            var saveEvent = m_saveGameManager.WriteSaveGame(world, name, image, null, quickSave: true);
             HandleSaveEvent(saveEvent, world);
         }
         else
@@ -684,7 +687,7 @@ public class GameLayerManager : IGameLayerManager
             string name = isCustomizedName
                 ? existingSave.Model?.Text ?? "Unnamed"
                 : world.MapInfo.GetMapNameWithPrefix(world.ArchiveCollection.Language);
-            var saveEvent = m_saveGameManager.WriteSaveGame(world, name, existingSave);
+            var saveEvent = m_saveGameManager.WriteSaveGame(world, name, image, existingSave);
             HandleSaveEvent(saveEvent, world, SaveMenu.SaveMessage);
         }
     }

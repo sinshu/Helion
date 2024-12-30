@@ -79,12 +79,12 @@ public class SaveGameManager
         return File.Exists(filePath);
     }
 
-    public SaveGame ReadSaveGame(string filename) => new SaveGame(GetSaveDir(), filename);
+    public SaveGame ReadSaveGame(string filename) => new(GetSaveDir(), filename);
 
-    public SaveGameEvent WriteNewSaveGame(IWorld world, string title, bool autoSave = false, bool quickSave = false) =>
-        WriteSaveGame(world, title, null, autoSave, quickSave);
+    public SaveGameEvent WriteNewSaveGame(IWorld world, string title, byte[]? image, bool autoSave = false, bool quickSave = false) =>
+        WriteSaveGame(world, title, image, null, autoSave, quickSave);
 
-    public SaveGameEvent WriteSaveGame(IWorld world, string title, SaveGame? existingSave, bool autoSave = false, bool quickSave = false)
+    public SaveGameEvent WriteSaveGame(IWorld world, string title, byte[]? image, SaveGame? existingSave, bool autoSave = false, bool quickSave = false)
     {
         if (existingSave == null && autoSave && m_config.Game.RotatingAutoSaves > 0)
         {
@@ -101,7 +101,7 @@ public class SaveGameManager
                 existingSave = matchingSaves.First();
         }
         string filename = existingSave?.FileName ?? GetNewSaveName(autoSave, quickSave);
-        var saveEvent = SaveGame.WriteSaveGame(world, title, GetSaveDir(), filename);
+        var saveEvent = SaveGame.WriteSaveGame(world, world.ToWorldModel(), title, GetSaveDir(), filename, image);
 
         GameSaved?.Invoke(this, saveEvent);
         return saveEvent;

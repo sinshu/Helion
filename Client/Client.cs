@@ -61,6 +61,7 @@ public partial class Client : IDisposable, IInputManagement
     private readonly ConsoleCommands m_consoleCommands = new();
     private readonly Profiler m_profiler = new();
     private readonly Ticker m_ticker = new(Constants.TicksPerSecond);
+    private readonly SaveGameScreenshotGenerator m_screenshotGenerator;
     private bool m_disposed;
     private bool m_takeScreenshot;
     private bool m_loadComplete;
@@ -99,11 +100,12 @@ public partial class Client : IDisposable, IInputManagement
         }
 
         m_window = new Window(AppInfo.ApplicationName, config, archiveCollection, m_fpsTracker, this, GlVersion.Major, GlVersion.Minor, GlVersion.Flags, CheckOpenGLSupport);
+        m_screenshotGenerator = new(m_window.Renderer);
         m_soundManager.SoundCreated += m_window.JoystickAdapter.RumbleForSoundCreated;
         SetIcon(m_window);
 
         m_layerManager = new GameLayerManager(config, m_window, console, m_consoleCommands, archiveCollection,
-            m_soundManager, m_saveGameManager, m_profiler);
+            m_soundManager, m_saveGameManager, m_profiler, m_screenshotGenerator);
 
         m_layerManager.GameLayerAdded += GameLayerManager_GameLayerAdded;
         m_saveGameManager.GameSaved += SaveGameManager_GameSaved;
@@ -363,7 +365,7 @@ public partial class Client : IDisposable, IInputManagement
         var mapInfoDef = worldLayer.CurrentMap;
 
         string title = $"Auto: {mapInfoDef.GetMapNameWithPrefix(worldLayer.World.ArchiveCollection.Language)}";
-        var saveGameEvent = m_saveGameManager.WriteNewSaveGame(worldLayer.World, title, autoSave: true);
+        var saveGameEvent = m_saveGameManager.WriteNewSaveGame(worldLayer.World, title, m_screenshotGenerator.GeneratePngImage(), autoSave: true);
         if (saveGameEvent.Success)
             m_console.AddMessage($"Saved {saveGameEvent.FileName}");
 
