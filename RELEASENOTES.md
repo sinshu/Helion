@@ -17,6 +17,7 @@
   - Support texture filtering with sprites
   - Refraction effect for spectres
   - Added nearest to bilinear and nearest to trilinear texture filter options
+  - Improved quick save performance to reduce large stutters when saving
 
 ## Bug fixes:
   - Fix per ammo values for box ammo and backpack amount from dehacked patch
