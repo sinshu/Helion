@@ -637,7 +637,7 @@ public class GameLayerManager : IGameLayerManager
             return;
         }
 
-        if (WorldLayer == null || !LastSave.HasValue || LastSave?.SaveGame.IsAutoSave == true)
+        if (WorldLayer == null || !LastSave.HasValue || LastSave?.SaveGame.Type == SaveGameType.Auto)
         {
             GoToSaveOrLoadMenu(true);
             return;
@@ -676,7 +676,7 @@ public class GameLayerManager : IGameLayerManager
         if (isRotating)
         {
             string name = $"Quick: {world.MapInfo.GetMapNameWithPrefix(world.ArchiveCollection.Language)}";
-            var saveEvent = await m_saveGameManager.WriteSaveGameAsync(world, name, m_screenshotGenerator, null, quickSave: true);
+            var saveEvent = await m_saveGameManager.WriteSaveGameAsync(world, name, m_screenshotGenerator, null, SaveGameType.Quick);
             HandleSaveEvent(saveEvent, world);
         }
         else

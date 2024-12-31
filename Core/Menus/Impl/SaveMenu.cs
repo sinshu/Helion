@@ -61,7 +61,7 @@ public class SaveMenu : Menu
         m_isSave = isSave;
         m_screenshotGenerator = screenshotGenerator;
 
-        m_saveGames = saveManager.GetMatchingSaveGames(saveManager.GetSaveGames()).ToList();
+        m_saveGames = saveManager.GetSaveGames();
         UpdateMenuComponents(setTop: true);
     }
 
@@ -153,7 +153,7 @@ public class SaveMenu : Menu
             {
                 string displayName = save.Model?.Text ?? UnknownSavedGameName;
                 string mapName = save.Model?.MapName ?? UnknownSavedGameName;
-                MenuSaveRowComponent saveRow = new(displayName, mapName, save.IsAutoSave || save.IsQuickSave,
+                MenuSaveRowComponent saveRow = new(displayName, mapName, save.Type != SaveGameType.Default,
                     null, CreateDeleteCommand(save));
                 saveRow.Action = new Func<Menu?>(UpdateSaveGame(save, new(() => saveRow.Text)));
                 return saveRow;
@@ -178,7 +178,7 @@ public class SaveMenu : Menu
             {
                 string displayName = save.Model?.Text ?? UnknownSavedGameName;
                 string fileName = System.IO.Path.GetFileName(save.FileName);
-                return new MenuSaveRowComponent(displayName, string.Empty, save.IsAutoSave || save.IsQuickSave,
+                return new MenuSaveRowComponent(displayName, string.Empty, save.Type != SaveGameType.Default,
                     CreateConsoleCommand($"load \"{fileName}\""), CreateDeleteCommand(save), save);
             });
             newComponents.AddRange(saveRowComponents);
