@@ -14,9 +14,13 @@ namespace Helion.World.Save;
 
 public class SaveGame
 {
-    private static readonly string SaveDataFile = "save.json";
-    private static readonly string WorldDataFile = "world.json";
-    private static readonly string ImageFile = "image.png";
+    public const string QuickPrefix = "quicksave";
+    public const string AutoPrefix = "autosave";
+    public const string DefaultPrefix = "savegame";
+
+    private const string SaveDataFile = "save.json";
+    private const string WorldDataFile = "world.json";
+    private const string ImageFile = "image.png";
 
     public readonly SaveGameModel? Model;
 
@@ -26,21 +30,21 @@ public class SaveGame
 
     public string FilePath => Path.Combine(SaveDir, FileName);
 
-    public bool IsAutoSave => Path.GetFileName(FileName).StartsWith("autosave");
-
-    public bool IsQuickSave => Path.GetFileName(FileName).StartsWith("quicksave");
+    public readonly SaveGameType Type;
 
     public SaveGame(string saveDir, string filename, SaveGameModel model)
     {
         SaveDir = saveDir;
         FileName = filename;
         Model = model;
+        Type = GetFileType(filename);
     }
 
     public SaveGame(string saveDir, string filename)
     {
         SaveDir = saveDir;
         FileName = filename;
+        Type = GetFileType(filename);
 
         try
         {
@@ -55,6 +59,16 @@ public class SaveGame
         {
             // Corrupt zip or bad serialize
         }
+    }
+
+    private static SaveGameType GetFileType(string fileName)
+    {
+        var file = Path.GetFileName(fileName);
+        if (file.StartsWith(AutoPrefix))
+            return SaveGameType.Auto;
+        else if (file.StartsWith(QuickPrefix))
+            return SaveGameType.Quick;
+        return SaveGameType.Default;
     }
 
     public WorldModel? ReadWorldModel()

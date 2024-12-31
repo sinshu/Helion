@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Helion.Graphics;
 using Helion.Models;
 using Helion.Resources.Archives.Collection;
 using Helion.Util;
 using Helion.Util.Configs;
-using Helion.Util.Extensions;
 using Helion.World.Util;
 using NLog;
 
@@ -30,6 +28,8 @@ public class SaveGameManager(IConfig config, ArchiveCollection archiveCollection
     private readonly ArchiveCollection m_archiveCollection = archiveCollection;
     private readonly string? m_saveDirCommandLineArg = saveDirCommandLineArg;
     private readonly List<SaveGame> m_currentSaves = [];
+    private readonly List<SaveGame> m_matchingSaves = [];
+    private readonly Comparison<SaveGame> m_saveDateComparison = new(CompareSaveDates);
     private bool m_currentSavesLoaded;
 
     public event EventHandler<SaveGameEvent>? GameSaved;
@@ -66,9 +66,9 @@ public class SaveGameManager(IConfig config, ArchiveCollection archiveCollection
     {
         if (m_currentSavesLoaded)
             return;
-
-        var saveGames = GetMatchingSaveGames(ReadSaveGameFiles());
-        m_currentSaves.AddRange(saveGames);
+        
+        m_currentSaves.AddRange(ReadSaveGameFiles());
+        m_matchingSaves.AddRange(GetMatchingSaveGames(m_currentSaves));
         m_currentSavesLoaded = true;
     }
 
@@ -80,14 +80,13 @@ public class SaveGameManager(IConfig config, ArchiveCollection archiveCollection
 
     public SaveGame ReadSaveGame(string filename) => new(GetSaveDir(), filename);
 
-    public Task<SaveGameEvent> WriteNewSaveGameAsync(IWorld world, string title, IScreenshotGenerator screenshotGenerator, bool autoSave = false, bool quickSave = false) =>
-        WriteSaveGameAsync(world, title, screenshotGenerator, null, autoSave, quickSave);
+    public Task<SaveGameEvent> WriteNewSaveGameAsync(IWorld world, string title, IScreenshotGenerator screenshotGenerator, SaveGameType type = SaveGameType.Default) =>
+        WriteSaveGameAsync(world, title, screenshotGenerator, null, type);
 
-    public async Task<SaveGameEvent> WriteSaveGameAsync(IWorld world, string title, IScreenshotGenerator screenshotGenerator, SaveGame? existingSave, bool autoSave = false, bool quickSave = false)
+    public async Task<SaveGameEvent> WriteSaveGameAsync(IWorld world, string title, IScreenshotGenerator screenshotGenerator, SaveGame? existingSave, SaveGameType type = SaveGameType.Default)
     {
-        existingSave = GetExistingSave(existingSave, autoSave, quickSave);
-        bool isNew = existingSave == null;
-        var filename = existingSave?.FileName ?? GetNewSaveName(autoSave, quickSave);
+        existingSave = GetExistingSave(existingSave, type);
+        var filename = existingSave?.FileName ?? GetNewSaveName(type);
         var worldModel = world.ToWorldModel();
         var image = screenshotGenerator.GetImage();
         var saveEvent = await Task.Run(() => SaveGame.WriteSaveGame(world, worldModel, title, GetSaveDir(), filename, screenshotGenerator, image));
@@ -97,16 +96,16 @@ public class SaveGameManager(IConfig config, ArchiveCollection archiveCollection
         return saveEvent;
     }
 
-    public SaveGameEvent WriteNewSaveGame(IWorld world, string title, IScreenshotGenerator screenshotGenerator, bool autoSave = false, bool quickSave = false) =>
-        WriteSaveGame(world, title, screenshotGenerator, null, autoSave, quickSave);
+    public SaveGameEvent WriteNewSaveGame(IWorld world, string title, IScreenshotGenerator screenshotGenerator, SaveGameType type = SaveGameType.Default) =>
+        WriteSaveGame(world, title, screenshotGenerator, null, type);
 
-    public SaveGameEvent WriteSaveGame(IWorld world, string title, IScreenshotGenerator screenshotGenerator, SaveGame? existingSave, bool autoSave = false, bool quickSave = false)
+    public SaveGameEvent WriteSaveGame(IWorld world, string title, IScreenshotGenerator screenshotGenerator, SaveGame? existingSave, SaveGameType type = SaveGameType.Default)
     {
-        existingSave = GetExistingSave(existingSave, autoSave, quickSave);
-        bool isNew = existingSave == null;
-        var filename = existingSave?.FileName ?? GetNewSaveName(autoSave, quickSave);
+        existingSave = GetExistingSave(existingSave, type);
+        var filename = existingSave?.FileName ?? GetNewSaveName(type);
         var worldModel = world.ToWorldModel();
-        var saveEvent = SaveGame.WriteSaveGame(world, worldModel, title, GetSaveDir(), filename, screenshotGenerator, screenshotGenerator.GetImage());
+        var image = screenshotGenerator.GetImage();
+        var saveEvent = SaveGame.WriteSaveGame(world, worldModel, title, GetSaveDir(), filename, screenshotGenerator, image);
 
         AddOrUpdateSaveGame(saveEvent.SaveGame);
         GameSaved?.Invoke(this, saveEvent);
@@ -115,32 +114,39 @@ public class SaveGameManager(IConfig config, ArchiveCollection archiveCollection
 
     private void AddOrUpdateSaveGame(SaveGame newSaveGame)
     {
-        for (int i = 0; i < m_currentSaves.Count; i++)
+        AddOrUpdateSaveGame(newSaveGame, m_currentSaves);
+        AddOrUpdateSaveGame(newSaveGame, m_matchingSaves);
+    }
+
+    private static void AddOrUpdateSaveGame(SaveGame newSaveGame, List<SaveGame> saveList)
+    {
+        for (int i = 0; i < saveList.Count; i++)
         {
-            var save = m_currentSaves[i];
-            if (save.FileName == newSaveGame.FileName)
+            var save = saveList[i];
+            if (save.Type == newSaveGame.Type && save.FileName == newSaveGame.FileName)
             {
-                m_currentSaves[i] = newSaveGame;
+                saveList[i] = newSaveGame;
                 return;
             }
         }
 
-        m_currentSaves.Add(newSaveGame);
+        saveList.Add(newSaveGame);
     }
 
-    private SaveGame? GetExistingSave(SaveGame? existingSave, bool autoSave, bool quickSave)
+    private SaveGame? GetExistingSave(SaveGame? existingSave, SaveGameType type)
     {
-        var saveGames = GetSaveGames();
-        if (existingSave == null && autoSave && m_config.Game.RotatingAutoSaves > 0)
+        var saveGames = GetSaveGames(sortByDate: false);
+
+        if (existingSave == null && type == SaveGameType.Auto && m_config.Game.RotatingAutoSaves > 0)
         {
-            var autoSaves = saveGames.Where(x => x.IsAutoSave).OrderBy(x => x.Model?.Date);
+            var autoSaves = saveGames.Where(x => x.Type == SaveGameType.Auto).OrderBy(x => x.Model?.Date);
             if (autoSaves.Any() && autoSaves.Count() >= m_config.Game.RotatingAutoSaves)
                 existingSave = autoSaves.First();
         }
 
-        if (existingSave == null && quickSave && m_config.Game.RotatingQuickSaves > 0)
+        if (existingSave == null && type == SaveGameType.Quick && m_config.Game.RotatingQuickSaves > 0)
         {
-            var quickSaves = saveGames.Where(x => x.IsQuickSave).OrderBy(x => x.Model?.Date);
+            var quickSaves = saveGames.Where(x => x.Type == SaveGameType.Quick).OrderBy(x => x.Model?.Date);
             if (quickSaves.Any() && quickSaves.Count() >= m_config.Game.RotatingQuickSaves)
                 existingSave = quickSaves.First();
         }
@@ -148,17 +154,18 @@ public class SaveGameManager(IConfig config, ArchiveCollection archiveCollection
         return existingSave;
     }
 
-    public IEnumerable<SaveGame> GetMatchingSaveGames(IEnumerable<SaveGame> saveGames)
+    private IEnumerable<SaveGame> GetMatchingSaveGames(List<SaveGame> saveGames)
     {
         return saveGames.Where(x => x.Model != null &&
             ModelVerification.VerifyModelFiles(x.Model.Files, m_archiveCollection, null));
     }
 
-    public List<SaveGame> GetSaveGames()
+    public List<SaveGame> GetSaveGames(bool sortByDate = true)
     {
         LoadCurrentSaveFiles();
-        m_currentSaves.Sort(new Comparison<SaveGame>(CompareSaveDates));
-        return m_currentSaves;
+        if (sortByDate)
+            m_matchingSaves.Sort(m_saveDateComparison);
+        return m_matchingSaves;
     }
 
     private List<SaveGame> ReadSaveGameFiles()
@@ -185,31 +192,28 @@ public class SaveGameManager(IConfig config, ArchiveCollection archiveCollection
         return true;
     }
 
-    private string GetNewSaveName(bool autoSave, bool quickSave)
+    private string GetNewSaveName(SaveGameType type)
     {
-        var files = Directory.GetFiles(GetSaveDir(), "*.hsg")
-            .Select(Path.GetFileName)
-            .WhereNotNull()
-            .ToList();
-
         int number = 0;
+        var searchSaves = m_currentSaves.Where(x => x.Type == type);
         while (true)
         {
-            string name = GetSaveName(number, autoSave, quickSave);
-            if (files.Any(x => x.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            string name = GetSaveName(number, type);
+            if (searchSaves.Any(x => x.FileName.Equals(name, StringComparison.OrdinalIgnoreCase)))
                 number++;
             else
                 return name;
         }
     }
 
-    private static string GetSaveName(int number, bool autoSave, bool quickSave)
+    private static string GetSaveName(int number, SaveGameType type)
     {
-        if (autoSave)
-            return $"autosave{number}.hsg";
-        else if (quickSave)
-            return $"quicksave{number}.hsg";
-        return $"savegame{number}.hsg";
+        return type switch
+        {
+            SaveGameType.Auto => $"{SaveGame.AutoPrefix}{number}.hsg",
+            SaveGameType.Quick => $"{SaveGame.QuickPrefix}{number}.hsg",
+            _ => $"{SaveGame.DefaultPrefix}{number}.hsg",
+        };
     }
 
     private static int CompareSaveDates(SaveGame x, SaveGame y)
