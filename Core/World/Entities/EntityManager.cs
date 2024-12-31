@@ -312,6 +312,7 @@ public class EntityManager : IDisposable
             }
         }
 
+        EntityCount = worldModel.Entities.Count;
         World.DataCache.EntityId = Math.Max(maxEntityId, maxPlayerId) + 1;
         return new WorldModelPopulateResult(players, entities);
     }
