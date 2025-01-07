@@ -20,6 +20,7 @@
   - Updated save game management to read save files on startup to fix load time of the load/save menu when there are a large number of save files to read
   - Improved quick save performance to reduce large stutters when saving
   - Add Boom RNG method with option to toggle between Boom and Vanilla Doom RNG
+  - Add save game thumbnails and summary details (kills, secrets, elapsed time) to Load menu
 
 ## Bug fixes:
   - Fix per ammo values for box ammo and backpack amount from dehacked patch
