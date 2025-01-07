@@ -1,14 +1,16 @@
-using System;
 using Helion.Geometry;
 using Helion.Geometry.Vectors;
 using Helion.Graphics;
 using Helion.Menus;
 using Helion.Menus.Base;
 using Helion.Menus.Base.Text;
+using Helion.Menus.Impl;
 using Helion.Render.Common;
 using Helion.Render.Common.Enums;
 using Helion.Render.Common.Renderers;
+using Helion.Render.Common.Textures;
 using Helion.Util;
+using System;
 using static Helion.Render.Common.RenderDimensions;
 
 namespace Helion.Layer.Menus;
@@ -18,6 +20,10 @@ public partial class MenuLayer
     private const int ActiveMillis = 500;
     private const int SelectedOffsetX = -32;
     private const int SelectedOffsetY = 5;
+
+    private IMenuComponent? m_previousSelectedComponent;
+    private IRenderableTextureHandle? m_saveGameTexture;
+    private SaveGameSummary? m_saveGameSummary;
 
     private bool ShouldDrawActive => (m_stopwatch.ElapsedMilliseconds % ActiveMillis) <= ActiveMillis / 2;
 
@@ -33,11 +39,16 @@ public partial class MenuLayer
         if (!m_menus.TryPeek(out Menu? menu))
             return;
 
+        bool shouldRenderSaveGameDetails =
+            (menu as SaveMenu)?.IsSaveMenu == false
+            && m_config.Game.ExtendedSaveGameInfo;
+
         int offsetY = menu.TopPixelPadding;
         for (int i = 0; i < menu.Components.Count; i++)
         {
             IMenuComponent component = menu.Components[i];
             bool isSelected = ReferenceEquals(menu.CurrentComponent, component);
+            bool wasSelected = ReferenceEquals(menu.CurrentComponent, m_previousSelectedComponent);
 
             switch (component)
             {
@@ -54,11 +65,21 @@ public partial class MenuLayer
                     DrawText(hud, largeTextComponent, ref offsetY);
                     break;
                 case MenuSaveRowComponent saveRowComponent:
-                    DrawSaveRow(hud, saveRowComponent, isSelected, ref offsetY);
+                    DrawSaveRow(hud, saveRowComponent, isSelected, wasSelected, ref offsetY, shouldRenderSaveGameDetails);
                     break;
                 default:
                     throw new Exception($"Unexpected menu component type for drawing: {component.GetType().FullName}");
             }
+
+            if (isSelected)
+            {
+                m_previousSelectedComponent = menu.CurrentComponent;
+            }
+        }
+
+        if (menu.CurrentComponent is MenuSaveRowComponent && m_saveGameSummary != null)
+        {
+            RenderSaveGameDetails(hud);
         }
     }
 
@@ -118,7 +139,7 @@ public partial class MenuLayer
     }
 
     private void DrawSaveRow(IHudRenderContext hud, MenuSaveRowComponent saveRowComponent, bool isSelected,
-        ref int offsetY)
+        bool wasPreviouslySelected, ref int offsetY, bool detailsEnabled)
     {
         const int LeftOffset = 32;
         const int DesiredRowVerticalPadding = 4;
@@ -145,9 +166,9 @@ public partial class MenuLayer
         hud.Image(LeftBarName, (offsetX, offsetY));
         offsetX += leftDim.Width;
 
-        const int MenuRowWidth = 248;
+        int menuRowWidth = detailsEnabled ? 180 : 248;
 
-        int blocks = (int)Math.Ceiling((MenuRowWidth - leftDim.Width - rightDim.Width) / (double)midDim.Width) + 1;
+        int blocks = (int)Math.Ceiling((menuRowWidth - leftDim.Width - rightDim.Width) / (double)midDim.Width) + 1;
         for (int i = 0; i < blocks; i++)
         {
             hud.Image(MiddleBarName, (offsetX, offsetY));
@@ -180,5 +201,56 @@ public partial class MenuLayer
         int rowTotalHeight = Math.Max(rowBgHeight, textArea.Height);
         int rowVerticalPadding = Math.Max(0, (14 + DesiredRowVerticalPadding) - rowTotalHeight);
         offsetY += rowTotalHeight + rowVerticalPadding;
+
+        if (isSelected && detailsEnabled)
+        {
+            if (!wasPreviouslySelected)
+            {
+                m_saveGameSummary = saveRowComponent.SaveGame == null
+                    ? null
+                    : new SaveGameSummary(saveRowComponent.SaveGame);
+
+                m_saveGameTexture = m_saveGameSummary?.UpdateSaveGameTexture(hud);
+            }
+        }
+    }
+
+    private void RenderSaveGameDetails(IHudRenderContext hud)
+    {
+        if (m_saveGameSummary == null)
+        {
+            return;
+        }
+
+        const int TextSize = 4;
+        const string Font = Constants.Fonts.Small;
+        const int BoxWidth = 80;
+        const int ThumbnailHeight = 60;
+        const int BoxHeight = ThumbnailHeight + 6 * 4;
+
+        Vec2I boxUpperLeft = (230, 31);
+        Vec2I boxLowerRight = boxUpperLeft + (BoxWidth, BoxHeight);
+
+        hud.FillBox((boxUpperLeft, boxLowerRight), Color.DarkGray);
+
+        if (m_saveGameTexture != null)
+        {
+            hud.Image(SaveGameSummary.TEXTURENAME, new HudBox(boxUpperLeft, boxUpperLeft + (BoxWidth, ThumbnailHeight)));
+        }
+
+        Vec2I offset = boxUpperLeft + (0, 60);
+
+        hud.Text(m_saveGameSummary.MapName, Font, TextSize, offset, out Dimension area, maxWidth: BoxWidth);
+        offset += (0, area.Height);
+
+        hud.Text(m_saveGameSummary.Date, Font, TextSize, offset, out area);
+        offset += (0, area.Height);
+        offset += (0, area.Height);
+
+        foreach (string str in m_saveGameSummary?.Stats ?? Array.Empty<string>())
+        {
+            hud.Text(str, Constants.Fonts.Small, 4, offset, out area);
+            offset += (0, area.Height);
+        }
     }
 }
