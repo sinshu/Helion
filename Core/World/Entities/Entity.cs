@@ -20,7 +20,6 @@ using System;
 using System.Diagnostics;
 using static Helion.Util.Assertion.Assert;
 using Helion.World.Blockmap;
-using Helion.World.Geometry.Subsectors;
 using Helion.Graphics.Palettes;
 using System.Runtime.CompilerServices;
 using Helion.World.Special.Specials;
@@ -33,8 +32,8 @@ namespace Helion.World.Entities;
 public partial class Entity : IDisposable, ITickable, ISoundSource
 {
     private const double Speed = 47000 / 65536.0;
-    private const int ForceGibDamage = ushort.MaxValue;
-    private const int KillDamage = ushort.MaxValue - 1;
+    protected const int ForceGibDamage = ushort.MaxValue;
+    protected const int KillDamage = ushort.MaxValue - 1;
     private const int DefaultClosetChaseSpeed = 40;
     public const double FloatSpeed = 4.0;
 
@@ -50,7 +49,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
 
     public int BlockmapCount;
     public EntityFlags Flags;
-    public Subsector Subsector;
+    public int SubsectorId;
     public FrameState FrameState;
     public double AngleRadians;
     public Vec3D Position;
@@ -73,9 +72,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public Vec3D CenterPoint => new(Position.X, Position.Y, Position.Z + (Height / 2));
     public Vec3D ProjectileAttackPos => new(Position.X, Position.Y, Position.Z + 32);
     public Vec3D HitscanAttackPos => new(Position.X, Position.Y, Position.Z + (Height / 2) + 8);
-    public int Armor;
-    public EntityProperties? ArmorProperties => ArmorDefinition?.Properties;
-    public EntityDefinition? ArmorDefinition;
     public int FrozenTics;
     public Sector Sector;
     public Sector HighestFloorSector;
@@ -86,13 +82,11 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public double LowestCeilingZ;
     public double HighestFloorZ;
     public DynamicArray<Sector> IntersectSectors = new();
-    public Vec3D SpawnPoint;
     public int Id;
     public int ThingId;
     public Line? BlockingLine;
     public Entity? BlockingEntity;
     public SectorPlane? BlockingSectorPlane;
-    public Player? PickupPlayer;
     public SectorDamageSpecial? SectorDamageSpecial;
 
     // Values that are modified from EntityProperties
@@ -107,8 +101,8 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
 
     public int LastRenderGametick;
     public double RenderDistanceSquared = double.MaxValue;
-    public int SlowTickMultiplier = 1;
-    public int ChaseFailureSkipCount;
+    public short SlowTickMultiplier = 1;
+    public short ChaseFailureSkipCount;
     public double ClosetChaseSpeed = DefaultClosetChaseSpeed;
     public virtual SoundChannel WeaponSoundChannel => SoundChannel.Default;
     public virtual int ProjectileKickBack => Properties.ProjectileKickBack;
@@ -143,7 +137,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         LowestCeilingSector = null!;
         SectorDamageSpecial = null;
         Sector = Sector.Default;
-        Subsector = Subsector.Default;
+        SubsectorId = 0;
         Properties = null!;
     }
 
@@ -199,7 +193,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         ReactionTime = entityModel.ReactionTime;
 
         Health = entityModel.Health;
-        Armor = entityModel.Armor;
 
         AngleRadians = entityModel.AngleRadians;
 
@@ -209,7 +202,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
 
         PrevPosition = entityModel.Box.GetCenter();
         Velocity = entityModel.GetVelocity();
-        SpawnPoint = entityModel.GetSpawnPoint();
         Sector = world.Sectors[entityModel.Sector];
         SectorDamageSpecial = Sector.SectorDamageSpecial;
                 
@@ -226,9 +218,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         HighestFloorObject = Sector;
         LowestCeilingObject = Sector;
 
-        if (entityModel.ArmorDefinition != null)
-            ArmorDefinition = WorldStatic.EntityManager.DefinitionComposer.GetByName(entityModel.ArmorDefinition);
-
         Alpha = (float)Properties.Alpha;
         MonsterMovementSpeed = Properties.MonsterMovementSpeed;
 
@@ -240,19 +229,19 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
 
     public EntityModel ToEntityModel(EntityModel entityModel)
     {
+        var spawnPoint = World.EntityManager.GetSpawnPoint(this);
         entityModel.Name = Definition.Name;
         entityModel.Id = Id;
         entityModel.ThingId = ThingId;
         entityModel.AngleRadians = AngleRadians;
-        entityModel.SpawnPointX = SpawnPoint.X;
-        entityModel.SpawnPointY = SpawnPoint.Y;
-        entityModel.SpawnPointZ = SpawnPoint.Z;
+        entityModel.SpawnPointX = spawnPoint.X;
+        entityModel.SpawnPointY = spawnPoint.Y;
+        entityModel.SpawnPointZ = spawnPoint.Z;
         entityModel.Box = ToEntityBoxModel();
         entityModel.VelocityX = Velocity.X;
         entityModel.VelocityY = Velocity.Y;
         entityModel.VelocityZ = Velocity.Z;
         entityModel.Health = Health;
-        entityModel.Armor = Armor;
         entityModel.FrozenTics = FrozenTics;
         entityModel.MoveCount = MoveCount;
         entityModel.Owner = Owner.Get()?.Id;
@@ -263,7 +252,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         entityModel.Sector = Sector.Id;
         entityModel.MoveDir = (int)m_direction;
         entityModel.BlockFloat = Flags.InFloat;
-        entityModel.ArmorDefinition = ArmorDefinition?.Name;
         entityModel.Frame = FrameState.ToFrameStateModel();
         entityModel.Flags = Flags.ToEntityFlagsModel();
         entityModel.Threshold = Threshold;
@@ -288,8 +276,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     {
         Flags = entity.Flags;
         Health = entity.Health;
-        Armor = entity.Armor;
-        ArmorDefinition = entity.ArmorDefinition;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -683,7 +669,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         }
         else
         {
-            damage = ApplyArmorDamage(damage);
             Health -= damage;
         }
 
@@ -718,26 +703,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public void SetRandomizeTicks(int opAnd = 3) =>
         FrameState.SetTics(FrameState.CurrentTick - (WorldStatic.Random.NextByte() & opAnd));
 
-    private int ApplyArmorDamage(int damage)
-    {
-        if (ArmorProperties == null || Armor == 0)
-            return damage;
-        if (ArmorProperties.Armor.SavePercent == 0)
-            return damage;
-
-        int armorDamage = (int)(damage * (ArmorProperties.Armor.SavePercent / 100.0));
-        if (Armor < armorDamage)
-            armorDamage = Armor;
-
-        Armor -= armorDamage;
-        damage = MathHelper.Clamp(damage - armorDamage, 0, damage);
-
-        if (Armor <= 0)
-            ArmorDefinition = null;
-
-        return damage;
-    }
-
     protected static bool IsWeapon(EntityDefinition definition) => definition.IsType(Inventory.WeaponClassName);
     protected static bool IsAmmo(EntityDefinition definition) => definition.IsType(Inventory.AmmoClassName);
 
@@ -759,6 +724,8 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
 
         return other.Flags.Solid;
     }
+
+    public Vec3D GetSpawnPoint() => World.EntityManager.GetSpawnPoint(this);
 
     public double GetMaxStepHeight()
     {
@@ -951,8 +918,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         Tracer = WeakEntity.Default;
         OnEntity = WeakEntity.Default;
         OverEntity = WeakEntity.Default;
-        Owner = WeakEntity.Default;
-        PickupPlayer = null;        
+        Owner = WeakEntity.Default;      
 
         if (World.DataCache.FreeEntity(this))
             Definition = null!;
@@ -970,7 +936,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         BlockingEntity = null;
         BlockingSectorPlane = null;
         Sector = Sector.Default;
-        Subsector = Subsector.Default;
+        SubsectorId = 0;
         HighestFloorObject = Sector.Default;
         LowestCeilingObject = Sector.Default;
         HighestFloorSector = Sector.Default;

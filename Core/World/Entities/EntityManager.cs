@@ -1,5 +1,4 @@
 using Helion.Geometry;
-using Helion.Geometry.Grids;
 using Helion.Geometry.Vectors;
 using Helion.Maps;
 using Helion.Maps.Components;
@@ -8,7 +7,6 @@ using Helion.Models;
 using Helion.Util;
 using Helion.Util.Container;
 using Helion.Util.Extensions;
-using Helion.World.Blockmap;
 using Helion.World.Entities.Definition;
 using Helion.World.Entities.Definition.Composer;
 using Helion.World.Entities.Inventories;
@@ -49,19 +47,18 @@ public class EntityManager : IDisposable
     public IWorld World;    
 
     public EntityDefinitionComposer DefinitionComposer;
-    public List<Player> Players = new();
-    public List<Player> VoodooDolls = new();
-    public List<Entity> MusicChangers = new();
-    private LookupArray<Player?> RealPlayersByNumber = new();
-    private readonly Dictionary<int, ISet<Entity>> TidToEntity = new();
-    private readonly UniformGrid<Block> m_blocks;
+    public List<Player> Players = [];
+    public List<Player> VoodooDolls = [];
+    public List<Entity> MusicChangers = [];
+    private readonly LookupArray<Player?> RealPlayersByNumber = new();
+    private readonly Dictionary<int, ISet<Entity>> TidToEntity = [];
+    private readonly Dictionary<int, Vec3D> m_spawnPoints = [];
 
     public EntityManager(IWorld world)
     {
         World = world;
         SpawnLocations = new SpawnLocations(world);
         DefinitionComposer = world.ArchiveCollection.EntityDefinitionComposer;
-        m_blocks = world.Blockmap.Blocks;
     }
 
     private static bool ZHeightSet(double z)
@@ -273,15 +270,16 @@ public class EntityManager : IDisposable
 
         for (int i = 0; i < worldModel.Players.Count; i++)
         {
-            bool isVoodooDoll = players.Any(x => x.PlayerNumber == worldModel.Players[i].Number);
-            Player? player = CreatePlayerFromModel(worldModel.Players[i], entities, isVoodooDoll);
+            var playerModel = worldModel.Players[i];
+            bool isVoodooDoll = players.Any(x => x.PlayerNumber == playerModel.Number);
+            Player? player = CreatePlayerFromModel(playerModel, entities, isVoodooDoll);
             if (player == null)
             {
-                Log.Error($"Failed to create player {worldModel.Players[i].Name}.");
+                Log.Error($"Failed to create player {playerModel.Name}.");
                 continue;
             }
-
             players.Add(player);
+            m_spawnPoints[player.Index] = new Vec3D(playerModel.SpawnPointX, playerModel.SpawnPointY, playerModel.SpawnPointZ);
         }
 
         for (int i = 0; i < worldModel.Entities.Count; i++)
@@ -310,6 +308,8 @@ public class EntityManager : IDisposable
                 if (tracerTarget != null)
                     entity.Entity.SetTracer(tracerTarget.Entity);
             }
+
+            m_spawnPoints[entity.Entity.Index] = new Vec3D(entity.Model.SpawnPointX, entity.Model.SpawnPointY, entity.Model.SpawnPointZ);
         }
 
         EntityCount = worldModel.Entities.Count;
@@ -361,6 +361,13 @@ public class EntityManager : IDisposable
     {
         RealPlayersByNumber.TryGetValue(playerNumber, out var player);
         return player;
+    }
+
+    public Vec3D GetSpawnPoint(Entity entity)
+    {
+        if (m_spawnPoints.TryGetValue(entity.Index, out var spawnPoint))
+            return spawnPoint;
+        return default;
     }
 
     private static object GetBoundingObject(WorldModelPopulateResult result, Sector sector, int? entityId)
@@ -461,8 +468,8 @@ public class EntityManager : IDisposable
             World.Link(entity);
 
         FinalizeEntity(entity, checkOnGround, zHeight, initSpawn);
-
-        entity.SpawnPoint = entity.Position;
+                
+        m_spawnPoints[entity.Index] = entity.Position;
         // Vanilla did not execute action functions on creation, it just set the state
         // Action functions will not execute until Tick() is called
         if (entity.Definition.SpawnState != null)
@@ -522,6 +529,7 @@ public class EntityManager : IDisposable
         MusicChangers.Clear();
         RealPlayersByNumber.SetAll(null);
         TeleportSpots.Clear();
+        m_spawnPoints.Clear();
     }
 
     private void ClearEntities()

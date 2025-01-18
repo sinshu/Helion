@@ -53,7 +53,6 @@ using static Helion.Dehacked.DehackedDefinition;
 using Helion.Resources.Definitions.MusInfo;
 using Helion.Util.Extensions;
 using System.Diagnostics.CodeAnalysis;
-using System.Diagnostics;
 using Helion.Resources.Archives.Entries;
 using Helion.Maps.Doom;
 using Helion.Maps.Specials.Vanilla;
@@ -170,13 +169,14 @@ public abstract partial class WorldBase : IWorld
     private int m_lastBumpActivateGametick;
     private LevelChangeType m_levelChangeType = LevelChangeType.Next;
     private LevelChangeFlags m_levelChangeFlags;
-    private Entity[] m_bossBrainTargets = Array.Empty<Entity>();
-    private readonly List<IMonsterCounterSpecial> m_bossDeathSpecials = new();
-    private readonly byte[] m_lineOfSightReject = Array.Empty<byte>();
+    private Entity[] m_bossBrainTargets = [];
+    private readonly List<IMonsterCounterSpecial> m_bossDeathSpecials = [];
+    private readonly byte[] m_lineOfSightReject = [];
     private readonly Func<DamageFuncParams, int> m_defaultDamageAction;
     private readonly EntityDefinition? m_teleportFogDef;
-    private readonly Dictionary<int, MusInfoDef> m_sectorToMusicChange = new();
+    private readonly Dictionary<int, MusInfoDef> m_sectorToMusicChange = [];
     private readonly DynamicArray<Entity> m_fallCheckEntities = new(32);
+    private readonly Dictionary<int, Player> m_itemPickupIndexToPlayers = [];
     private MusInfoDef? m_lastMusicChange;
     private int m_changeMusicTicks = 0;
     private int m_losDistance = DefaultLineOfSightDistance;
@@ -495,11 +495,11 @@ public abstract partial class WorldBase : IWorld
         WorldStatic.Frames = ArchiveCollection.Definitions.EntityFrameTable.Frames;
         WorldStatic.Random = Random;
         WorldStatic.SlowTickEnabled = Config.SlowTick.Enabled.Value;
-        WorldStatic.SlowTickChaseFailureSkipCount = Config.SlowTick.ChaseFailureSkipCount;
-        WorldStatic.SlowTickDistance = Config.SlowTick.Distance;
-        WorldStatic.SlowTickChaseMultiplier = Config.SlowTick.ChaseMultiplier;
-        WorldStatic.SlowTickLookMultiplier = Config.SlowTick.LookMultiplier;
-        WorldStatic.SlowTickTracerMultiplier = Config.SlowTick.TracerMultiplier;
+        WorldStatic.SlowTickChaseFailureSkipCount = (short)Config.SlowTick.ChaseFailureSkipCount;
+        WorldStatic.SlowTickDistance = (short)Config.SlowTick.Distance;
+        WorldStatic.SlowTickChaseMultiplier = (short)Config.SlowTick.ChaseMultiplier;
+        WorldStatic.SlowTickLookMultiplier = (short)Config.SlowTick.LookMultiplier;
+        WorldStatic.SlowTickTracerMultiplier = (short)Config.SlowTick.TracerMultiplier;
         WorldStatic.IsFastMonsters = IsFastMonsters;
         WorldStatic.IsSlowMonsters = SkillDefinition.SlowMonsters;
         WorldStatic.InfinitelyTallThings = Config.Compatibility.InfinitelyTallThings;
@@ -555,13 +555,13 @@ public abstract partial class WorldBase : IWorld
     private void SlowTickDistance_OnChanged(object? sender, int distance) =>
         WorldStatic.SlowTickDistance = distance;
     private void SlowTickChaseFailureSkipCount_OnChanged(object? sender, int value) =>
-        WorldStatic.SlowTickChaseFailureSkipCount = value;
+        WorldStatic.SlowTickChaseFailureSkipCount = (short)value;
     private void SlowTickChaseMultiplier_OnChanged(object? sender, int value) =>
-        WorldStatic.SlowTickChaseMultiplier = value;
+        WorldStatic.SlowTickChaseMultiplier = (short)value;
     private void SlowTickLookMultiplier_OnChanged(object? sender, int value) =>
-        WorldStatic.SlowTickLookMultiplier = value;
+        WorldStatic.SlowTickLookMultiplier = (short)value;
     private void SlowTickTracerMultiplier_OnChanged(object? sender, int value) =>
-        WorldStatic.SlowTickTracerMultiplier = value;
+        WorldStatic.SlowTickTracerMultiplier = (short)value;
     private void FastMonsters_OnChanged(object? sender, bool enabled)
     {
         IsFastMonsters = SkillDefinition.IsFastMonsters(Config);
@@ -1767,8 +1767,9 @@ public abstract partial class WorldBase : IWorld
             player = findPlayer;
         }
 
-        item.PickupPlayer = player;
+        m_itemPickupIndexToPlayers[item.Index] = player; 
         item.FrameState.SetState(Constants.FrameStates.Pickup, warn: false);
+        m_itemPickupIndexToPlayers.Remove(item.Index);
 
         if (item.Flags.CountItem)
         {
@@ -2135,12 +2136,13 @@ public abstract partial class WorldBase : IWorld
     private void HandleRespawn(Entity entity)
     {
         entity.Respawn = false;
-        if (entity.Definition.Flags.Solid && IsPositionBlockedByEntity(entity, entity.SpawnPoint))
+        var spawnPoint = EntityManager.GetSpawnPoint(entity);
+        if (entity.Definition.Flags.Solid && IsPositionBlockedByEntity(entity, spawnPoint))
             return;
 
-        var newEntity = EntityManager.Create(entity.Definition, entity.SpawnPoint, 0, entity.AngleRadians, entity.ThingId, true);
+        var newEntity = EntityManager.Create(entity.Definition, spawnPoint, 0, entity.AngleRadians, entity.ThingId, true);
         CreateTeleportFog(entity.Position);
-        CreateTeleportFog(entity.SpawnPoint);
+        CreateTeleportFog(spawnPoint);
 
         newEntity.Flags.Friendly = entity.Flags.Friendly;
         newEntity.AngleRadians = entity.AngleRadians;
@@ -2827,10 +2829,10 @@ public abstract partial class WorldBase : IWorld
             if ((entity.ClosetFlags & ClosetFlags.MonsterCloset) != 0)
                 continue;
 
-            if (entity.Subsector.Id < 0 || entity.Subsector.Id >= Geometry.BspTree.Subsectors.Count)
+            if (entity.SubsectorId < 0 || entity.SubsectorId >= Geometry.BspTree.Subsectors.Count)
                 continue;
 
-            var subsector = Geometry.BspTree.Subsectors[entity.Subsector.Id];
+            var subsector = Geometry.BspTree.Subsectors[entity.SubsectorId];
             if (subsector.IslandId < 0 || subsector.IslandId >= Geometry.IslandGeometry.Islands.Count)
                 continue;
 
@@ -3179,4 +3181,6 @@ public abstract partial class WorldBase : IWorld
     }
 
     public virtual Player GetCameraPlayer() => Player;
+
+    public bool GetPickupPlayer(Entity entity, [NotNullWhen(true)] out Player? player) => m_itemPickupIndexToPlayers.TryGetValue(entity.Index, out player);
 }
