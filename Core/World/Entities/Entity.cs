@@ -45,7 +45,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public Entity? RenderBlockNext;
     public Entity? RenderBlockPrevious;
     public Block? RenderBlock;
-    public BlockRange LastBlockRange;
+    public BlockRange BlockRange;
 
     public int BlockmapCount;
     public EntityFlags Flags;
@@ -58,11 +58,11 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public int Health;
     public int MoveCount;
 
-    public WeakEntity Target = WeakEntity.Default;
-    public WeakEntity Tracer = WeakEntity.Default;
-    public WeakEntity OnEntity = WeakEntity.Default;
-    public WeakEntity OverEntity = WeakEntity.Default;
-    public WeakEntity Owner = WeakEntity.Default;
+    public Entity? Target() => m_target != null && m_target.Id == m_targetId ? m_target : null;
+    public Entity? Tracer() => m_tracer != null && m_tracer.Id == m_tracerId ? m_tracer : null;
+    public Entity? Owner() => m_owner != null && m_owner.Id == m_ownerId ? m_owner : null;
+    public Entity? OnEntity() => m_onEntity != null && m_onEntity.Id == m_onEntityId ? m_onEntity : null;
+    public Entity? OverEntity() => m_overEntity != null && m_overEntity.Id == m_overEntityId ? m_overEntity : null;
 
     public EntityDefinition Definition;
     public EntityProperties Properties;
@@ -108,8 +108,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public virtual int ProjectileKickBack => Properties.ProjectileKickBack;
 
     public bool IsBlocked() => BlockingEntity != null || BlockingLine != null || BlockingSectorPlane != null;
-    public Block[] Blocks = new Block[4];
-    public int BlocksLength;
     public readonly DynamicArray<LinkableNode<Entity>> SectorNodes = new();
     public bool IsDisposed;
 
@@ -127,6 +125,19 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public virtual bool IsPlayer => false;
     public bool OnSectorFloorZ(Sector sector) => sector.ToFloorZ(Position) == Position.Z;
 
+    // This follows the pattern from WeakEntity.cs. Unrolled the properties here to save the padding from the struct.
+    private Entity? m_target;
+    private Entity? m_tracer;
+    private Entity? m_owner;
+    private Entity? m_onEntity;
+    private Entity? m_overEntity;
+
+    private int m_targetId;
+    private int m_tracerId;
+    private int m_ownerId;
+    private int m_onEntityId;
+    private int m_overEntityId;
+
     public Entity()
     {
         World = null!;
@@ -139,6 +150,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         Sector = Sector.Default;
         SubsectorId = 0;
         Properties = null!;
+        BlockRange.StartX = Constants.ClearBlock;
     }
 
     public void Set(int index, int id, int thingId, EntityDefinition definition, in Vec3D position, double angleRadians,
@@ -176,7 +188,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         Alpha = (float)Properties.Alpha;
         MonsterMovementSpeed = Properties.MonsterMovementSpeed;
 
-        FrameState = new(this, definition);
+        FrameState = new(definition);
     }
 
     public void Set(int index, EntityModel entityModel, EntityDefinition definition, IWorld world)
@@ -244,9 +256,9 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         entityModel.Health = Health;
         entityModel.FrozenTics = FrozenTics;
         entityModel.MoveCount = MoveCount;
-        entityModel.Owner = Owner.Get()?.Id;
-        entityModel.Target = Target.Get()?.Id;
-        entityModel.Tracer = Tracer.Get()?.Id;
+        entityModel.Owner = Owner()?.Id;
+        entityModel.Target = Target()?.Id;
+        entityModel.Tracer = Tracer()?.Id;
         entityModel.MoveLinked = MoveLinked;
         entityModel.Respawn = Respawn;
         entityModel.Sector = Sector.Id;
@@ -279,27 +291,40 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetTarget(Entity? entity) =>
-        Target = new WeakEntity(entity);
+    public void SetTarget(Entity? entity)
+    {
+        m_target = entity;
+        m_targetId = entity == null ? 0 : entity.Id;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetTracer(Entity? entity) =>
-        Tracer = new WeakEntity(entity);
+    public void SetTracer(Entity? entity)
+    {
+        m_tracer = entity;
+        m_tracerId = entity == null ? 0 : entity.Id;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetOnEntity(Entity? entity)
     {
-        HadOnEntity = HadOnEntity || OnEntity.NotNull();
-        OnEntity = new WeakEntity(entity);
+        HadOnEntity = HadOnEntity || OnEntity() != null;
+        m_onEntity = entity;
+        m_onEntityId = entity == null ? 0 : entity.Id;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetOverEntity(Entity? entity) =>
-        OverEntity = new WeakEntity(entity);
+    public void SetOverEntity(Entity? entity)
+    {
+        m_overEntity = entity;
+        m_overEntityId = entity == null ? 0 : entity.Id;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetOwner(Entity? entity) =>
-        Owner = new WeakEntity(entity);
+    public void SetOwner(Entity? entity)
+    {
+        m_owner = entity;
+        m_ownerId = entity == null ? 0 : entity.Id;
+    }
 
     public double PitchTo(Entity entity) => Position.Pitch(entity.Position, Position.XY.Distance(entity.Position.XY));
     public double PitchTo(Vec3D start, Entity entity) => start.Pitch(entity.Position, Position.XY.Distance(entity.Position.XY));
@@ -372,24 +397,30 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
 
     public unsafe void UnlinkBlockMapBlocks()
     {
-        for (int blockIndex = 0; blockIndex < BlocksLength; blockIndex++)
+        if (BlockRange.StartX == Constants.ClearBlock)
+            return;
+
+        var blocks = World.Blockmap.Blocks.Blocks;
+        for (var by = BlockRange.StartY; by <= BlockRange.EndY; by++)
         {
-            var block = Blocks[blockIndex];
-            var data = block.EntityIndices;
-            for (int index = block.EntityIndicesLength - 1; index >= 0; index--)
+            for (var bx = BlockRange.StartX; bx <= BlockRange.EndX; bx++)
             {
-                if (data[index] == Index)
+                var block = blocks[by * World.Blockmap.Blocks.Width + bx];
+                var data = block.EntityIndices;
+                for (int index = block.EntityIndicesLength - 1; index >= 0; index--)
                 {
-                    block.EntityIndicesLength--;
-                    if (index < block.EntityIndicesLength)
-                        Array.Copy(data, index + 1, data, index, block.EntityIndicesLength - index);
-                    break;
+                    if (data[index] == Index)
+                    {
+                        block.EntityIndicesLength--;
+                        if (index < block.EntityIndicesLength)
+                            Array.Copy(data, index + 1, data, index, block.EntityIndicesLength - index);
+                        break;
+                    }
                 }
             }
-
-            Blocks[blockIndex] = null!;
         }
-        BlocksLength = 0;
+
+        BlockRange.StartX = Constants.ClearBlock;
     }
 
     public virtual void Tick()
@@ -404,7 +435,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         if (Flags.BossSpawnShot && ReactionTime > 0)
             ReactionTime--;
 
-        FrameState.Tick();
+        FrameState.Tick(this);
 
         if (IsDisposed)
             return;
@@ -456,25 +487,25 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public void SetSpawnState()
     {
         if (Definition.SpawnState != null)
-            FrameState.SetFrameIndex(Definition.SpawnState.Value);
+            FrameState.SetFrameIndex(this, Definition.SpawnState.Value);
     }
 
     public void SetSeeState()
     {
         if (Definition.SeeState != null)
-            FrameState.SetFrameIndex(Definition.SeeState.Value);
+            FrameState.SetFrameIndex(this, Definition.SeeState.Value);
     }
 
     public void SetMissileState()
     {
         if (Definition.MissileState != null)
-            FrameState.SetFrameIndex(Definition.MissileState.Value);
+            FrameState.SetFrameIndex(this, Definition.MissileState.Value);
     }
 
     public void SetMeleeState()
     {
         if (Definition.MeleeState != null)
-            FrameState.SetFrameIndex(Definition.MeleeState.Value);
+            FrameState.SetFrameIndex(this, Definition.MeleeState.Value);
     }
 
     public void SetDeathState(Entity? source)
@@ -484,7 +515,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         if (!IsDisposed)
             SetDeath(source, false);
                 
-        FrameState.SetFrameIndex(deathState);
+        FrameState.SetFrameIndex(this, deathState);
 
         if (!IsDisposed)
             SetDeathRandomizeTicks();
@@ -496,7 +527,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
             SetDeath(source, true);
 
         if (Definition.XDeathState.HasValue)
-            FrameState.SetFrameIndex(Definition.XDeathState.Value);
+            FrameState.SetFrameIndex(this, Definition.XDeathState.Value);
 
         if (!IsDisposed)
             SetDeathRandomizeTicks();
@@ -522,8 +553,8 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     public bool SetCrushState()
     {
         // Check if there is a Crush state, otherwise default to GenericCrush
-        if (FrameState.SetState(Constants.FrameStates.Crush, warn: false) ||
-            FrameState.SetState(Constants.FrameStates.GenericCrush, warn: false))
+        if (FrameState.SetState(this, Definition, Constants.FrameStates.Crush, warn: false) ||
+            FrameState.SetState(this, Definition, Constants.FrameStates.GenericCrush, warn: false))
         {
             Flags.DontGib = true;
             Flags.Solid = false;
@@ -538,7 +569,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     {        
         if (Definition.RaiseState != null)
         {
-            FrameState.SetFrameIndex(Definition.RaiseState.Value);
+            FrameState.SetFrameIndex(this, Definition.RaiseState.Value);
             Health = Definition.Properties.Health;
             Height = Definition.Properties.Height;
             Flags.CrushGiblets = false;
@@ -548,7 +579,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
     }
 
     public void SetHealState() =>
-        FrameState.SetState(Constants.FrameStates.Heal);
+        FrameState.SetState(this, Definition, Constants.FrameStates.Heal);
 
     public void PlaySeeSound(SoundContext ctx = default)
     {
@@ -606,7 +637,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
 
     public virtual bool CanDamage(Entity source, DamageType damageType)
     {
-        Entity damageSource = source.Owner.Get() ?? source;
+        Entity damageSource = source.Owner() ?? source;
         if (damageSource.IsPlayer)
             return true;
 
@@ -648,12 +679,12 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         bool willRetaliate = false;
         if (source != null)
         {
-            damageSource = source.Owner.Get() ?? source;
+            damageSource = source.Owner() ?? source;
             if (!CanDamage(source, damageType))
                 return false;
 
             canRetaliate = WillRetaliateFrom(damageSource) && Threshold <= 0 && !damageSource.IsDead && damageSource != this;
-            willRetaliate = canRetaliate && damageSource != Target.Get();
+            willRetaliate = canRetaliate && damageSource != Target();
             if (willRetaliate && !damageSource.Flags.NoTarget && !IsFriend(damageSource))
                 SetTarget(damageSource);
         }
@@ -682,7 +713,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         else if (setPainState && !Flags.Skullfly && Definition.PainState != null)
         {
             Flags.JustHit = true;
-            FrameState.SetFrameIndex(Definition.PainState.Value);
+            FrameState.SetFrameIndex(this, Definition.PainState.Value);
         }
 
         // Skullfly is not turned off here as the original game did not do this
@@ -712,7 +743,7 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
 
     public bool CanBlockEntity(Entity other)
     {
-        if (this == other || Owner.Get() == other || other.Flags.NoClip)
+        if (this == other || Owner() == other || other.Flags.NoClip)
             return false;
 
         if (Flags.Ripper)
@@ -908,17 +939,25 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         UnlinkFromWorld();
         Unlink();
 
-        FrameState.SetFrameIndex(Constants.NullFrameIndex);
+        FrameState.SetFrameIndex(this, Constants.NullFrameIndex);
 
-        BlocksLength = 0;
         SectorNodes.Clear();
         IntersectSectors.Clear();
 
-        Target = WeakEntity.Default;
-        Tracer = WeakEntity.Default;
-        OnEntity = WeakEntity.Default;
-        OverEntity = WeakEntity.Default;
-        Owner = WeakEntity.Default;      
+        m_target = null;
+        m_targetId = 0;
+
+        m_tracer = null;
+        m_tracerId = 0;
+
+        m_owner = null;
+        m_ownerId = 0;
+
+        m_onEntity = null;
+        m_onEntityId = 0;
+
+        m_overEntity = null;
+        m_overEntityId = 0;
 
         if (World.DataCache.FreeEntity(this))
             Definition = null!;
@@ -944,7 +983,6 @@ public partial class Entity : IDisposable, ITickable, ISoundSource
         SlowTickMultiplier = 1;
         ChaseFailureSkipCount = 0;
         ClosetChaseSpeed = DefaultClosetChaseSpeed;
-        LastBlockRange = default;
     }
 
     private void Unlink()
