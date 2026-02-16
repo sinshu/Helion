@@ -24,6 +24,7 @@ public class SkySphereShader : RenderProgram
     private readonly int m_skyMax;
     private readonly int m_colorMixLocation;
     private readonly int m_gammaCorrectionLocation;
+    private readonly int m_verticalNoPerspectiveLocation;
 
     public SkySphereShader(string? name = null) : base(name ?? "Sky sphere")
     {
@@ -43,6 +44,7 @@ public class SkySphereShader : RenderProgram
         m_skyMax = Uniforms.GetLocation("skyMax");
         m_colorMixLocation = Uniforms.GetLocation("colorMix");
         m_gammaCorrectionLocation = Uniforms.GetLocation("gammaCorrection");
+        m_verticalNoPerspectiveLocation = Uniforms.GetLocation("verticalNoPerspective");
     }
 
     public void BoundTexture(TextureUnit unit) => ProgramUniforms.Set(unit, m_boundTextureLocation);
@@ -61,6 +63,7 @@ public class SkySphereShader : RenderProgram
     public void SkyMax(float value) => ProgramUniforms.Set(value, m_skyMax);
     public void ColorMix(Vec3F value) => ProgramUniforms.Set(value, m_colorMixLocation);
     public void GammaCorrection(float value) => ProgramUniforms.Set(value, m_gammaCorrectionLocation);
+    public void VerticalNoPerspective(bool value) => ProgramUniforms.Set(value, m_verticalNoPerspectiveLocation);
 
     protected override string VertexShader() => @"
         #version 330
@@ -74,13 +77,17 @@ public class SkySphereShader : RenderProgram
         uniform mat4 mvp;
         uniform int flipU;
         uniform vec2 scrollOffset;
+        uniform int verticalNoPerspective;
 
         void main() {
             uvFrag = uv;
             scrollOffsetFrag = scrollOffset;
             if (flipU == 1)
                 uvFrag.x = -uvFrag.x;            
-            gl_Position = mvp * vec4(pos, 1.0);
+            vec4 projectedPos = mvp * vec4(pos, 1.0);
+            if (verticalNoPerspective == 1)
+                projectedPos.y *= projectedPos.w;
+            gl_Position = projectedPos;
         }
     ";
 

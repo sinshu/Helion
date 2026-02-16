@@ -198,6 +198,7 @@ public class SkySphereRenderer : IDisposable
         skyProgram.SkyHeight(skyHeight);
         skyProgram.SkyMin(0.5f - skyHeight);
         skyProgram.SkyMax(0.5f + skyHeight);
+        skyProgram.VerticalNoPerspective(skyRenderMode == SkyRenderMode.Vanilla);
     }
 
     private static Dimension GetSkyTextureDimension(SkyTexture skyTexture)
