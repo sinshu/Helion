@@ -1,4 +1,3 @@
-using GlmSharp;
 using Helion.Geometry.Vectors;
 using Helion.Render.OpenGL.Renderers.Legacy.World.Shader;
 using Helion.Render.OpenGL.Shader;
@@ -10,7 +9,8 @@ public class SkySphereShader : RenderProgram
 {
     private readonly int m_boundTextureLocation;
     private readonly int m_colormapTextureLocation;
-    private readonly int m_mvpLocation;
+    private readonly int m_projectionScaleLocation;
+    private readonly int m_cameraAnglesLocation;
     private readonly int m_hasInvulnerabilityLocation;
     private readonly int m_scaleLocation;
     private readonly int m_flipULocation;
@@ -31,7 +31,8 @@ public class SkySphereShader : RenderProgram
     {
         m_boundTextureLocation = Uniforms.GetLocation("boundTexture");
         m_colormapTextureLocation = Uniforms.GetLocation("colormapTexture");
-        m_mvpLocation = Uniforms.GetLocation("mvp");
+        m_projectionScaleLocation = Uniforms.GetLocation("projectionScale");
+        m_cameraAnglesLocation = Uniforms.GetLocation("cameraAngles");
         m_hasInvulnerabilityLocation = Uniforms.GetLocation("hasInvulnerability");
         m_scaleLocation = Uniforms.GetLocation("scale");
         m_flipULocation = Uniforms.GetLocation("flipU");
@@ -52,7 +53,8 @@ public class SkySphereShader : RenderProgram
     public void BoundTexture(TextureUnit unit) => ProgramUniforms.Set(unit, m_boundTextureLocation);
     public void ColormapTexture(TextureUnit unit) => ProgramUniforms.Set(unit, m_colormapTextureLocation);
     public void HasInvulnerability(bool invul) => ProgramUniforms.Set(invul, m_hasInvulnerabilityLocation);
-    public void Mvp(mat4 mat) => ProgramUniforms.Set(mat, m_mvpLocation);
+    public void ProjectionScale(Vec2F value) => ProgramUniforms.Set(value, m_projectionScaleLocation);
+    public void CameraAngles(Vec2F value) => ProgramUniforms.Set(value, m_cameraAnglesLocation);
     public void Scale(Vec2F v) => ProgramUniforms.Set(v, m_scaleLocation);
     public void FlipU(bool flip) => ProgramUniforms.Set(flip, m_flipULocation);
     public void PaletteIndex(int index) => ProgramUniforms.Set(index, m_paletteIndexLocation);
@@ -74,16 +76,33 @@ public class SkySphereShader : RenderProgram
         layout(location = 0) in vec3 pos;
         layout(location = 1) in vec2 uv;
 
-        out vec2 uvFrag;
-
-        uniform mat4 mvp;
-        uniform int flipU;
+        out vec2 screenPosition;
 
         void main() {
-            uvFrag = uv;
+            screenPosition = uv;
+            gl_Position = vec4(pos, 1.0);
+        }
+    ";
+
+    protected static string SkyProjection => @"
+        in vec2 screenPosition;
+        uniform vec2 projectionScale;
+        uniform vec2 cameraAngles;
+        uniform int flipU;
+        vec2 uvFrag;
+
+        vec2 skyUV() {
+            const float pi = 3.141592653589793;
+            // Doom chooses a column by viewing angle, but uses a constant row
+            // step across the screen. Never divide the vertical coordinate by
+            // the distance to a cylinder (or use a spherical latitude).
+            float u = (atan(screenPosition.x * projectionScale.x) - cameraAngles.x) / (2.0 * pi);
             if (flipU == 1)
-                uvFrag.x = -uvFrag.x;            
-            gl_Position = mvp * vec4(pos, 1.0);
+                u = -u;
+            // Vanilla's skytexturemid is row 100. Pitch extends this mapping
+            // by translating rows, keeping horizontal lines straight.
+            float v = 0.25 + 100.0 / 512.0 - screenPosition.y * projectionScale.y - cameraAngles.y / pi;
+            return vec2(u, v);
         }
     ";
 
@@ -103,7 +122,7 @@ vec4 bottomFetchColor = bottomColor;
     protected override string FragmentShader() => @"
         #version 330
 
-        in vec2 uvFrag;
+        ${SkyProjection}
 
         out vec4 fragColor;
 
@@ -135,6 +154,7 @@ vec4 bottomFetchColor = bottomColor;
         }
 
         void main() {
+            uvFrag = skyUV();
             if (uvFrag.y < skyMin) {
                 fragColor = topColor;
             }
@@ -163,6 +183,7 @@ vec4 bottomFetchColor = bottomColor;
             ${GammaCorrection}
         }
     "
+    .Replace("${SkyProjection}", SkyProjection)
     .Replace("${FetchTopBottomColors}", FetchTopBottomColors)
     .Replace("${InvulnerabilityFragColor}", FragFunction.InvulnerabilityFragColor)
     .Replace("${ColorMapFetch}", FragFunction.ColorMapFetch(false, ColorMapFetchContext.Default))

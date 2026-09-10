@@ -1,5 +1,4 @@
 using System;
-using GlmSharp;
 using Helion.Geometry;
 using Helion.Geometry.Vectors;
 using Helion.Render.OpenGL.Buffer.Array.Vertex;
@@ -16,11 +15,12 @@ namespace Helion.Render.OpenGL.Renderers.Legacy.World.Sky.Sphere;
 
 public class SkySphereRenderer : IDisposable
 {
-    private const int HorizontalSpherePoints = 64;
-    private const int VerticalSpherePoints = 64;
-    private static readonly vec3 UpOpenGL = new(0, 1, 0);
-    private static readonly SkySphereVertex[] SpherePoints = new SkySphereVertex[VerticalSpherePoints * HorizontalSpherePoints * 6];
-    private static bool SphereInitialized;
+    // Clip-space quad; the stencil buffer restricts it to visible sky surfaces.
+    private static readonly SkySphereVertex[] ScreenPoints =
+    [
+        new(-1, -1, 0, -1, -1), new(1, -1, 0, 1, -1), new(1, 1, 0, 1, 1),
+        new(-1, -1, 0, -1, -1), new(1, 1, 0, 1, 1), new(-1, 1, 0, -1, 1),
+    ];
 
     private readonly VertexPipeline<SkySphereVertex> m_pipeline;
     private readonly SkySphereShader m_skyProgram;
@@ -33,11 +33,11 @@ public class SkySphereRenderer : IDisposable
     {
         m_skyProgram = new();
         m_foregroundProgram = new();
-        m_pipeline = new([m_skyProgram, m_foregroundProgram], new StaticVertexBuffer<SkySphereVertex>("Sky sphere", HorizontalSpherePoints * VerticalSpherePoints * 6), "Sky sphere");
+        m_pipeline = new([m_skyProgram, m_foregroundProgram], new StaticVertexBuffer<SkySphereVertex>("Sky sphere", ScreenPoints.Length), "Sky sphere");
         m_texture = new(archiveCollection, textureManager, textureHandle);
         m_texture.LoadTextures();
 
-        GenerateSphereVerticesAndUpload();
+        UploadScreenVertices();
     }
 
     ~SkySphereRenderer()
@@ -56,7 +56,7 @@ public class SkySphereRenderer : IDisposable
 
         m_skyProgram.Bind();
         SetSkyUniforms(m_skyProgram, renderInfo, options, m_mode, skyTexture, skyTexture, skyTransform.Sky);
-        DrawSphere(skyTexture.GlTexture);
+        DrawSky(skyTexture.GlTexture);
         m_skyProgram.Unbind();
 
         if (skyTransform.Foreground == null)
@@ -67,7 +67,7 @@ public class SkySphereRenderer : IDisposable
 
         var foregroundTexture = m_texture.GetForegroundTexture(skyTransform.Foreground);
         SetSkyUniforms(m_foregroundProgram, renderInfo, SkyOptions.Flip, m_mode, foregroundTexture, skyTexture, skyTransform.Foreground);
-        DrawSphere(foregroundTexture.GlTexture);
+        DrawSky(foregroundTexture.GlTexture);
 
         m_foregroundProgram.Unbind();
     }
@@ -78,32 +78,7 @@ public class SkySphereRenderer : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private static mat4 CalculateMvp(RenderInfo renderInfo)
-    {
-        // We want the sky sphere to not be touching the NDC edges because
-        // we'll be doing some translating which could push it outside of
-        // the clipping box. Therefore we shrink the unit sphere from r = 1
-        // down to r = 0.5 around the origin.
-        mat4 model = mat4.Scale(0.5f);
-
-        // Our world system is in the form <X, Z, -Y> with respect to
-        // the OpenGL coordinate transformation system. We will also move
-        // our body upwards by 20% (so 0.1 units since r = 0.5) so prevent
-        // the horizon from appearing.
-        Vec3F direction = renderInfo.Camera.Direction;
-        vec3 pos = new vec3(0.0f, 0.1f, 0.0f);
-        vec3 eye = new vec3(direction.X, direction.Z, -direction.Y);
-        mat4 view = mat4.LookAt(pos, pos + eye, UpOpenGL);
-
-        // Our projection far plane only goes as far as the scaled sphere
-        // radius.
-        var fovInfo = Renderer.GetFieldOfViewInfo(renderInfo);
-        mat4 projection = mat4.PerspectiveFov(fovInfo.FovY, fovInfo.Width, fovInfo.Height, 0.0f, 0.5f);
-
-        return projection * view * model;
-    }
-
-    private void DrawSphere(GLLegacyTexture texture)
+    private void DrawSky(GLLegacyTexture texture)
     {
         texture.Bind();
         m_pipeline.Bind();
@@ -112,46 +87,12 @@ public class SkySphereRenderer : IDisposable
         texture.Unbind();
     }
 
-    private void GenerateSphereVerticesAndUpload()
+    private void UploadScreenVertices()
     {
-        if (!SphereInitialized)
-        {
-            SphereInitialized = true;
-            InitializeSpherePoints();
-        }
-
-        m_pipeline.Vbo.Data.Data = SpherePoints;
-        m_pipeline.Vbo.Data.Length = SpherePoints.Length;
+        m_pipeline.Vbo.Data.Data = ScreenPoints;
+        m_pipeline.Vbo.Data.Length = ScreenPoints.Length;
         m_pipeline.Vbo.SetNotUploaded();
         m_pipeline.Vbo.UploadIfNeeded();
-    }
-
-    private static void InitializeSpherePoints()
-    {
-        SphereTable sphereTable = new(HorizontalSpherePoints, VerticalSpherePoints);
-        int index = 0;
-        for (int row = 0; row < VerticalSpherePoints; row++)
-        {
-            for (int col = 0; col < HorizontalSpherePoints; col++)
-            {
-                // Note that this works fine with the +1, it will not go
-                // out of range because we specifically made sure that the
-                // code adds in one extra vertex for us on both the top row
-                // and the right column.
-                SkySphereVertex bottomLeft = sphereTable.MercatorRectangle[row, col];
-                SkySphereVertex bottomRight = sphereTable.MercatorRectangle[row, col + 1];
-                SkySphereVertex topLeft = sphereTable.MercatorRectangle[row + 1, col];
-                SkySphereVertex topRight = sphereTable.MercatorRectangle[row + 1, col + 1];
-
-                SpherePoints[index++] = topLeft;
-                SpherePoints[index++] = bottomLeft;
-                SpherePoints[index++] = topRight;
-
-                SpherePoints[index++] = topRight;
-                SpherePoints[index++] = bottomLeft;
-                SpherePoints[index++] = bottomRight;
-            }
-        }
     }
 
     private static void SetSkyUniforms(SkySphereShader skyProgram, RenderInfo renderInfo, SkyOptions options, SkyRenderMode skyRenderMode,
@@ -169,7 +110,13 @@ public class SkySphereRenderer : IDisposable
 
         skyProgram.BoundTexture(BindTextures.BoundTexture);
         skyProgram.ColormapTexture(BindTextures.Colormap);
-        skyProgram.Mvp(CalculateMvp(renderInfo));
+        var fov = Renderer.GetFieldOfViewInfo(renderInfo);
+        float tanHalfFovY = MathF.Tan(fov.FovY / 2);
+        // At the default FOV, map the original 200 screen rows to 200 sky texels.
+        // CalcScale uses 512 texels per unit of vertical sky coordinates.
+        float verticalScale = (200f / 1024f) * tanHalfFovY / MathF.Tan(63.2f * MathF.PI / 360);
+        skyProgram.ProjectionScale(new Vec2F(tanHalfFovY * fov.Width / fov.Height, verticalScale));
+        skyProgram.CameraAngles(new Vec2F(renderInfo.Camera.YawRadians, renderInfo.Camera.PitchRadians));
         skyProgram.Scale(scaleUV);
         skyProgram.FlipU((options & SkyOptions.Flip) != 0);
         skyProgram.ColorMix(renderInfo.Uniforms.ColorMix.Sky);
